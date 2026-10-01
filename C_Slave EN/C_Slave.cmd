@@ -2434,9 +2434,8 @@ $uia = $true
 foreach ($n in 'UIAutomationClient','UIAutomationTypes','WindowsBase') {
   try { $loc = [Reflection.Assembly]::LoadWithPartialName($n).Location; if ($loc) { $refs += $loc } else { $uia = $false } } catch { $uia = $false }
 }
-$ap = @{ TypeDefinition = $src; ReferencedAssemblies = $refs; ErrorAction = 'Stop' }
-if ($uia) { $ap.CompilerOptions = '/define:UIA' }
-try { Add-Type @ap } catch { Fail $_ }
+if ($uia) { $src = "#define UIA`n" + $src }
+try { Add-Type -TypeDefinition $src -ReferencedAssemblies $refs -ErrorAction Stop } catch { Fail $_ }
 # icon + desktop shortcut (created once on first run; recreate with: C_Slave.cmd icon)
 try {
   $d = Join-Path $env:LOCALAPPDATA 'C_Slave_EN'
