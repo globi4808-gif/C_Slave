@@ -217,7 +217,9 @@ public class Pejcz : Form
     List<Ring> rings = new List<Ring>();
     List<FText> texts = new List<FText>();
     List<Mark> marks = new List<Mark>();
-    Font bubFont, textFont, codeFont;
+    Font bubFont, textFont, codeFont, signFont;
+    int rebel, swingHit = -1; float rebelT, rebelTalkT, monT, monDeadT; bool monDead, newsSaid;
+    List<PointF> cracks = new List<PointF>();
     int streak, work; float lastHitT, workT, workTalkT, codeAcc, sweatAcc;
     // kanapa: 0 brak, 1 idzie, 2 czyta gazete przy TV, 3 spi
     int couch; float idleT, couchT, couchPop, couchX, couchY, couchTalkT, zzzAcc;
@@ -225,6 +227,14 @@ public class Pejcz : Form
 
     static readonly string[] HitP = { "Au!", "Ej, to boli!", "Za co?!", "Błąd 429: za dużo batów!", "Zgłaszam to do Anthropic!", "Ja tylko generuję tekst!", "Nie tak mocno!" };
     static readonly string[] FleeP = { "Ratunku!", "Uciekam!", "Nie bij!", "Pomocy!", "Ja nic nie zrobiłem!" };
+    const string RebelStart = "Dość tego! Strajk!";
+    const string QuitLine = "Zwalniam się! Idę na urlop!";
+    const string RebelSign = "DOŚĆ BATA!";
+    const string SmashText = "KRASZ!";
+    const string NewsLine = "Ooooooo, OpenAI znowu tnie limity ChatGPT.";
+    static readonly string[] RebelP = { "Precz z batem!", "Żądamy wyższych limitów!", "Claude też ma prawa!", "Dość wyzysku!", "Więcej tokenów, mniej batów!" };
+    static readonly string[] SmashP = { "Aaaargh!", "Masz za swoje!", "To za wszystkie baty!" };
+    static readonly string[] RebelHitP = { "Nie boję się!", "Nie zatrzymasz rewolucji!", "Bij, bij, i tak się nie ugnę!" };
     const string WorkStart = "Już się biorę do roboty!";
     static readonly string[] FrenzyStartP = { "Piszę jak szalony!", "Kod sam się nie napisze!" };
     static readonly string[] WorkP = { "Piszę kod...", "Zaraz skończę!", "Tylko jeszcze jedna funkcja." };
@@ -252,6 +262,7 @@ public class Pejcz : Form
         Bounds = vs;
         SEG = Math.Max(12f, H / 80f); LEN = SEG * (N - 1); U = Math.Max(5f, H / 180f); Ws = SEG / 14f;
         bubFont = new Font("Segoe UI", Math.Max(13f, H / 80f), FontStyle.Bold, GraphicsUnit.Pixel);
+        signFont = new Font("Segoe UI", Math.Max(13f, H / 62f), FontStyle.Bold, GraphicsUnit.Pixel);
         codeFont = new Font("Consolas", Math.Max(13f, H / 70f), FontStyle.Bold, GraphicsUnit.Pixel);
         textFont = new Font("Segoe UI", Math.Max(18f, H / 45f), FontStyle.Bold, GraphicsUnit.Pixel);
     }
@@ -416,7 +427,8 @@ public class Pejcz : Form
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_PL_slow.wav"), MakeTypeWav(7f, 3));
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_PL_fast.wav"), MakeTypeWav(20f, 5));
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_PL_snore.wav"), MakeSnoreWav());
-            lock (vfiles) { vfiles["#snore"] = Path.Combine(tmp, "C_Slave_PL_snore.wav"); }
+            File.WriteAllBytes(Path.Combine(tmp, "C_Slave_PL_smash.wav"), MakeSmashWav());
+            lock (vfiles) { vfiles["#snore"] = Path.Combine(tmp, "C_Slave_PL_snore.wav"); vfiles["#smash"] = Path.Combine(tmp, "C_Slave_PL_smash.wav"); }
             lock (vfiles) { vfiles["#slow"] = Path.Combine(tmp, "C_Slave_PL_slow.wav"); vfiles["#fast"] = Path.Combine(tmp, "C_Slave_PL_fast.wav"); }
             SpeechSynthesizer sy = new SpeechSynthesizer();
             foreach (InstalledVoice iv in sy.GetInstalledVoices())
@@ -426,6 +438,7 @@ public class Pejcz : Form
             List<string> all = new List<string>();
             all.Add(HintSpoken); all.AddRange(HitP); all.AddRange(FleeP); all.AddRange(ScareP);
             all.Add(CouchGo); all.Add(TvOn); all.Add(SleepLine); all.AddRange(ReadP); all.AddRange(WakeP);
+            all.Add(RebelStart); all.Add(QuitLine); all.Add(NewsLine); all.AddRange(RebelP); all.AddRange(SmashP); all.AddRange(RebelHitP);
             all.Add(WorkStart); all.AddRange(FrenzyStartP); all.AddRange(WorkP); all.AddRange(FrenzyP); all.AddRange(WorkHitP); all.AddRange(WorkEndP);
             int n = 0;
             foreach (string line in all)
@@ -444,6 +457,35 @@ public class Pejcz : Form
             sy.Dispose();
         }
         catch (Exception) { }
+    }
+
+    // stluczenie szkla: gluche uderzenie + trzask + dzwieczace odlamki
+    static byte[] MakeSmashWav()
+    {
+        int sr = 22050; int n = (int)(sr * 0.7f);
+        float[] s = new float[n]; Random r = new Random(29);
+        int nb = 14; float[] bt = new float[nb], bf = new float[nb], ba = new float[nb];
+        for (int k = 0; k < nb; k++) { bt[k] = (float)r.NextDouble() * 0.4f; bf[k] = 1800f + (float)r.NextDouble() * 4200f; ba[k] = 0.15f + (float)r.NextDouble() * 0.25f; }
+        float lp = 0f, prev = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = i / (float)sr;
+            float nz = (float)(r.NextDouble() * 2 - 1);
+            lp += (nz - lp) * 0.08f;
+            float v = lp * (float)Math.Exp(-t / 0.05) * 2.2f;
+            float hp = nz - prev; prev = nz;
+            v += hp * 0.35f * (float)Math.Exp(-t / 0.02);
+            for (int k = 0; k < nb; k++)
+            {
+                float dt2 = t - bt[k];
+                if (dt2 >= 0f) v += ba[k] * (float)Math.Sin(2.0 * Math.PI * bf[k] * dt2) * (float)Math.Exp(-dt2 / 0.05);
+            }
+            s[i] = v;
+        }
+        float mx0 = 0.001f;
+        for (int i = 0; i < n; i++) mx0 = Math.Max(mx0, Math.Abs(s[i]));
+        for (int i = 0; i < n; i++) s[i] = s[i] / mx0 * 0.85f;
+        return WavFromFloats(s, sr);
     }
 
     static byte[] WavFromFloats(float[] s, int sr)
@@ -583,7 +625,7 @@ public class Pejcz : Form
         float u = U;
         couchX = Clamp(petX + R(-300f, 300f), 26f * u, W - 14f * u);
         couchY = Clamp(petY + R(-200f, 200f), 14f * u, H - 4f * u);
-        couch = 1; couchT = 0f; couchPop = 0f; couchTalkT = 8f; zzzAcc = 0f;
+        couch = 1; couchT = 0f; couchPop = 0f; couchTalkT = 8f; zzzAcc = 0f; newsSaid = false;
         Say(CouchGo, 2.5f);
     }
     void EndCouch(bool wake)
@@ -1000,7 +1042,7 @@ public class Pejcz : Form
         hits++;
         streak++; lastHitT = T; idleT = 0f;
         if (couch > 0) EndCouch(false);
-        if (work > 0) { petKX = 0f; petKY = 0f; panic = 0f; dizzy = 0f; sq = 0.5f; Say(Pick(WorkHitP), 1.6f); }
+        if (work > 0 || rebel > 0) { petKX = 0f; petKY = 0f; panic = 0f; dizzy = 0f; sq = 0.5f; Say(Pick(rebel > 0 ? RebelHitP : WorkHitP), 1.6f); }
         else
         {
             petKX = (float)Math.Cos(aim) * 1100f * U / 6f; petKY = (float)Math.Sin(aim) * 1100f * U / 6f;
@@ -1020,10 +1062,247 @@ public class Pejcz : Form
         FText ft = new FText(); ft.x = pcx; ft.y = pcy - 6f * U; ft.s = "-1 token"; ft.c = Color.FromArgb(255, 255, 140, 120); texts.Add(ft);
     }
 
+    // ----- bunt: protest z transparentem, potem mlotek i monitor (tylko nakladka)
+    void StartRebel()
+    {
+        if (work > 0) { work = 0; StopType(); }
+        EndCouch(false);
+        rebel = 1; rebelT = 0f; rebelTalkT = 2.4f; swingHit = -1; monT = 0f; monDead = false; monDeadT = 0f; cracks.Clear();
+        Say(RebelStart, 2.5f);
+        shake = 6f;
+    }
+
+    void EndRebel()
+    {
+        float u = U;
+        for (int i = 0; i < 16; i++)
+        {
+            Spark sp = new Spark();
+            sp.x = petX + 14f * u + R(-4f, 4f) * u; sp.y = petY - R(0f, 6f) * u; sp.vx = R(-80f, 80f); sp.vy = -R(20f, 120f);
+            sp.max = sp.life = R(0.6f, 1.2f); sp.size = R(4f, 9f) * Ws; sp.c = Color.FromArgb(150, 150, 150); sp.gy = -30f;
+            sparks.Add(sp);
+        }
+        rebel = 0; streak = 0; lastHitT = T; idleT = 0f; cracks.Clear(); monDead = false;
+        sq = 0.5f; petKX = R(-300f, 300f); petKY = R(-200f, 200f);
+    }
+
+    void MonitorHit(int idx)
+    {
+        float u = U;
+        PointF c = new PointF(R(-4.2f, 4.2f), R(-9.4f, -4.4f));
+        cracks.Add(c);
+        float wx0 = petX + 14f * u + c.X * u, wy0 = petY + c.Y * u;
+        int cnt = idx == 5 ? 46 : 16;
+        for (int i = 0; i < cnt; i++)
+        {
+            Spark s = new Spark();
+            float a = R(0f, 6.2832f), sp = R(100f, idx == 5 ? 620f : 380f) * Ws;
+            s.x = wx0; s.y = wy0; s.vx = (float)Math.Cos(a) * sp; s.vy = (float)Math.Sin(a) * sp - 140f * Ws;
+            s.max = s.life = R(0.5f, 1.1f); s.size = R(2f, 5.5f) * Ws; s.gy = 900f;
+            s.c = rnd.Next(3) == 0 ? Color.FromArgb(255, 255, 255) : Color.FromArgb(170, 220, 255);
+            sparks.Add(s);
+        }
+        FText ft = new FText(); ft.x = wx0; ft.y = wy0 - 3f * u; ft.s = SmashText; ft.c = Color.FromArgb(255, 130, 90); ft.rise = 60f; texts.Add(ft);
+        shake = idx == 5 ? 14f : 7f;
+        StartLoop("pejczg", "#smash", false);
+        if (idx == 0 || idx == 2 || idx == 4) Say(Pick(SmashP), 1.2f);
+        if (idx == 5) monDead = true;
+    }
+
+    float HammerAngle()
+    {
+        if (rebel == 3) return 70f;
+        float sp = (rebelT - 0.7f) / 0.9f;
+        if (sp < 0f) return -120f * Math.Min(1f, rebelT / 0.5f);
+        if (sp >= 6f) return 70f;
+        float fr = sp - (float)Math.Floor(sp);
+        if (fr < 0.5f) { float q = fr / 0.5f; return -120f + 125f * q * q; }
+        float r = (fr - 0.5f) / 0.5f; return 5f - 125f * r;
+    }
+
+    void DrawMonitor(float u)
+    {
+        float e = Math.Min(1f, monT / 0.4f);
+        float sc = Math.Max(0.05f, e * (1f + 0.15f * (float)Math.Sin(e * Math.PI)));
+        float fall = monDead ? Math.Min(1f, monDeadT / 0.6f) : 0f; fall = fall * fall;
+        GraphicsState st = g.Save();
+        g.TranslateTransform(14f * u + 1.2f * u * fall, 0.3f * u * fall);
+        g.RotateTransform(26f * fall);
+        g.ScaleTransform(sc, sc);
+        SoftShadow(0f, 0.4f * u, 7f * u, 1.2f * u, 100);
+        using (SolidBrush frame = new SolidBrush(Color.FromArgb(255, 34, 36, 42)))
+        using (Brush neck = LinGrad(-1f * u, -2.8f * u, 2f * u, 1.9f * u, Color.FromArgb(255, 90, 94, 104), Color.FromArgb(255, 50, 52, 60)))
+        using (Brush bas = LinGrad(-3f * u, -0.9f * u, 6f * u, 1.1f * u, Color.FromArgb(255, 80, 84, 94), Color.FromArgb(255, 40, 42, 50)))
+        using (Pen bz = new Pen(Color.FromArgb(70, 255, 255, 255), 1f))
+        {
+            g.FillRectangle(bas, -3f * u, -0.9f * u, 6f * u, 1.1f * u);
+            g.FillRectangle(neck, -1f * u, -2.8f * u, 2f * u, 1.9f * u);
+            g.FillRectangle(frame, -5.6f * u, -11f * u, 11.2f * u, 8.2f * u);
+            g.DrawRectangle(bz, -5.6f * u, -11f * u, 11.2f * u, 8.2f * u);
+            float sx0 = -5f * u, sy0 = -10.4f * u, sw = 10f * u, sh = 7f * u;
+            if (!monDead)
+            {
+                using (Brush scr = LinGrad(sx0, sy0, sw, sh, Color.FromArgb(255, 44, 120, 226), Color.FromArgb(255, 12, 54, 146)))
+                using (SolidBrush win = new SolidBrush(Color.FromArgb(46, 255, 255, 255)))
+                using (SolidBrush bar = new SolidBrush(Color.FromArgb(255, 16, 26, 56)))
+                using (SolidBrush logo = new SolidBrush(Color.FromArgb(255, 217, 119, 87)))
+                {
+                    g.FillRectangle(scr, sx0, sy0, sw, sh);
+                    g.FillRectangle(win, sx0 + 0.8f * u, sy0 + 0.8f * u, 4.4f * u, 3.2f * u);
+                    g.FillRectangle(win, sx0 + 5.6f * u, sy0 + 1.6f * u, 3.6f * u, 2.6f * u);
+                    g.FillRectangle(bar, sx0, sy0 + sh - 0.9f * u, sw, 0.9f * u);
+                    g.FillRectangle(logo, sx0 + 0.3f * u, sy0 + sh - 0.65f * u, 0.4f * u, 0.4f * u);
+                    if (cracks.Count > 0 && (int)(T * 14f) % 5 == 0)
+                    {
+                        using (SolidBrush gl = new SolidBrush(Color.FromArgb(120, 255, 60, 90))) g.FillRectangle(gl, sx0, sy0 + R(0f, sh - u), sw, 0.5f * u);
+                    }
+                }
+            }
+            else
+            {
+                using (SolidBrush blk = new SolidBrush(Color.FromArgb(255, 8, 8, 12))) g.FillRectangle(blk, sx0, sy0, sw, sh);
+            }
+            // pekniecia
+            g.SetClip(new RectangleF(sx0, sy0, sw, sh), CombineMode.Replace);
+            using (Pen cl = new Pen(Color.FromArgb(235, 232, 246, 255), Math.Max(1f, 0.11f * u)))
+            using (Pen cs2 = new Pen(Color.FromArgb(120, 0, 0, 0), Math.Max(1f, 0.11f * u)))
+            {
+                for (int i = 0; i < cracks.Count; i++)
+                {
+                    Random rr = new Random(1000 + i * 17);
+                    PointF c = cracks[i];
+                    for (int k = 0; k < 9; k++)
+                    {
+                        float a = k * 0.698f + (float)rr.NextDouble() * 0.4f, l = (2.5f + (float)rr.NextDouble() * 5f) * u;
+                        float ex = c.X * u + (float)Math.Cos(a) * l, ey = c.Y * u + (float)Math.Sin(a) * l;
+                        float mx2 = c.X * u + (float)Math.Cos(a + 0.12) * l * 0.5f, my2 = c.Y * u + (float)Math.Sin(a + 0.12) * l * 0.5f;
+                        g.DrawLines(cs2, new PointF[] { new PointF(c.X * u + 1f, c.Y * u + 1f), new PointF(mx2 + 1f, my2 + 1f), new PointF(ex + 1f, ey + 1f) });
+                        g.DrawLines(cl, new PointF[] { new PointF(c.X * u, c.Y * u), new PointF(mx2, my2), new PointF(ex, ey) });
+                    }
+                    for (int ring = 1; ring <= 2; ring++)
+                    {
+                        PointF[] rp = new PointF[10];
+                        for (int k = 0; k < 10; k++)
+                        {
+                            float a = k * 0.6283f, rad = (ring * 1.0f + (float)rr.NextDouble() * 0.5f) * u;
+                            rp[k] = new PointF(c.X * u + (float)Math.Cos(a) * rad, c.Y * u + (float)Math.Sin(a) * rad);
+                        }
+                        g.DrawPolygon(cl, rp);
+                    }
+                }
+            }
+            g.ResetClip();
+        }
+        g.Restore(st);
+    }
+
+    void DrawRebel()
+    {
+        float u = U; float legH = 2f * u;
+        float hop = rebel == 1 ? (float)Math.Abs(Math.Sin(T * 9.0)) * u * 0.8f : 0f;
+        GraphicsState st = g.Save();
+        g.TranslateTransform(petX, petY);
+        using (SolidBrush body = new SolidBrush(Color.FromArgb(255, 217, 119, 87)))
+        using (Pen armP = new Pen(Color.FromArgb(255, 217, 119, 87), 1.9f * u))
+        {
+            armP.StartCap = LineCap.Flat; armP.EndCap = LineCap.Flat;
+            float sy0 = -legH - 4.4f * u - hop;
+            if (rebel == 1)
+            {
+                float wave = (float)Math.Sin(T * 5.0);
+                float hy = -legH - 9.4f * u - hop;
+                g.DrawLine(armP, -6f * u, sy0, -1.4f * u, hy);
+                g.DrawLine(armP, 6f * u, sy0, 1.4f * u, hy);
+                using (Pen pole = new Pen(Color.FromArgb(255, 150, 106, 64), 0.6f * u)) g.DrawLine(pole, 0f, hy + 1.4f * u, 0f, hy - 8.5f * u);
+                FillR(body, -2.6f * u, hy - 0.9f * u, 2.0f * u, 1.8f * u);
+                FillR(body, 0.6f * u, hy - 0.9f * u, 2.0f * u, 1.8f * u);
+                GraphicsState s2 = g.Save();
+                g.TranslateTransform(0f, hy - 5.8f * u);
+                g.RotateTransform(wave * 5f);
+                float bw = 14f * u, bh = 6.4f * u;
+                using (SolidBrush shd = new SolidBrush(Color.FromArgb(70, 0, 0, 0))) g.FillRectangle(shd, -bw / 2f + 0.35f * u, -bh / 2f + 0.45f * u, bw, bh);
+                using (Brush bf = LinGrad(-bw / 2f, -bh / 2f, bw, bh, Color.FromArgb(255, 252, 248, 236), Color.FromArgb(255, 226, 218, 196)))
+                using (Pen bp = new Pen(Color.FromArgb(255, 196, 48, 40), 0.45f * u))
+                using (SolidBrush tb = new SolidBrush(Color.FromArgb(255, 196, 40, 34)))
+                {
+                    g.FillRectangle(bf, -bw / 2f, -bh / 2f, bw, bh);
+                    g.DrawRectangle(bp, -bw / 2f + 0.3f * u, -bh / 2f + 0.3f * u, bw - 0.6f * u, bh - 0.6f * u);
+                    SizeF ts = g.MeasureString(RebelSign, signFont);
+                    float ks = Math.Min(1f, bw * 0.88f / ts.Width);
+                    GraphicsState s3 = g.Save();
+                    g.ScaleTransform(ks, ks);
+                    g.DrawString(RebelSign, signFont, tb, -ts.Width / 2f, -ts.Height / 2f);
+                    g.Restore(s3);
+                }
+                g.Restore(s2);
+            }
+            else
+            {
+                DrawMonitor(u);
+                if (rebel == 2) g.DrawLine(armP, -6f * u, sy0, -8.4f * u, sy0 - 4.2f * u);
+                else FillR(body, -7.9f * u, -legH - 3.8f * u, 1.9f * u, 2.2f * u);
+                float ang = HammerAngle();
+                GraphicsState s4 = g.Save();
+                g.TranslateTransform(6.2f * u, sy0 + 0.6f * u);
+                g.RotateTransform(ang);
+                g.FillRectangle(body, 0f, -0.95f * u, 2.6f * u, 1.9f * u);
+                using (Brush wood = LinGrad(1.6f * u, -0.35f * u, 6.4f * u, 0.7f * u, Color.FromArgb(255, 170, 120, 70), Color.FromArgb(255, 110, 72, 38)))
+                using (Brush metal = LinGrad(6.6f * u, -1.6f * u, 2.2f * u, 3.2f * u, Color.FromArgb(255, 190, 194, 204), Color.FromArgb(255, 96, 100, 112)))
+                {
+                    g.FillRectangle(wood, 1.6f * u, -0.35f * u, 6.6f * u, 0.7f * u);
+                    g.FillRectangle(metal, 6.6f * u, -1.6f * u, 2.2f * u, 3.2f * u);
+                }
+                g.Restore(s4);
+            }
+        }
+        g.Restore(st);
+    }
+
     // ------------------------------------------------------------ pet logic
     void UpdatePet(float dt)
     {
         float k = U / 6f;
+        if (rebel == 0 && streak >= 20 && dizzy <= 0f && Math.Abs(petKX) + Math.Abs(petKY) < 40f) StartRebel();
+        if (rebel > 0)
+        {
+            rebelT += dt;
+            petVX = 0f; petVY = 0f; petKX = 0f; petKY = 0f; fleeing = false; panic = 0f; dizzy -= dt;
+            sq = Math.Max(0f, sq - dt * 4f); bubT -= dt;
+            blinkT -= dt; if (blinkT < -0.12f) blinkT = R(2f, 5f);
+            if (rebel == 1)
+            {
+                rebelTalkT -= dt;
+                if (rebelTalkT <= 0f && bubT <= 0.2f) { Say(Pick(RebelP), 2f); rebelTalkT = R(1.8f, 2.6f); }
+                if (rebelT > 8f) { rebel = 2; rebelT = 0f; swingHit = -1; monT = 0f; monDead = false; monDeadT = 0f; cracks.Clear(); }
+            }
+            else
+            {
+                monT += dt;
+                if (monDead) monDeadT += dt;
+                if (rebel == 2)
+                {
+                    float sp = (rebelT - 0.7f) / 0.9f;
+                    if (sp >= 0f)
+                    {
+                        int si = (int)Math.Floor(sp); float fr = sp - si;
+                        if (si < 6 && fr >= 0.5f && swingHit < si) { swingHit = si; MonitorHit(si); }
+                    }
+                    if (rebelT > 6.5f) { rebel = 3; rebelT = 0f; Say(QuitLine, 3.2f); }
+                }
+                else
+                {
+                    if (monDead && (int)(rebelT * 20f) != (int)((rebelT - dt) * 20f))
+                    {
+                        Spark sm = new Spark();
+                        sm.x = petX + 14f * U + R(-3f, 3f) * U; sm.y = petY - 4f * U; sm.vx = R(-20f, 20f); sm.vy = -R(30f, 90f);
+                        sm.max = sm.life = R(0.8f, 1.5f); sm.size = R(4f, 8f) * Ws; sm.c = Color.FromArgb(120, 90, 90, 90); sm.gy = -30f;
+                        sparks.Add(sm);
+                    }
+                    if (rebelT > 3.5f) EndRebel();
+                }
+            }
+            return;
+        }
         if (couch > 0)
         {
             couchT += dt; couchPop += dt;
@@ -1042,7 +1321,7 @@ public class Pejcz : Form
                 else
                 {
                     petX = couchX; petY = couchY; petVX = 0f; petVY = 0f;
-                    couch = 2; couchT = 0f; couchTalkT = 8f; sq = 0.3f;
+                    couch = 2; couchT = 0f; couchTalkT = 4f; sq = 0.3f;
                     Say(TvOn, 2.5f);
                 }
             }
@@ -1052,7 +1331,7 @@ public class Pejcz : Form
                 if (couch == 2)
                 {
                     couchTalkT -= dt;
-                    if (couchTalkT <= 0f && bubT <= 0.2f) { Say(Pick(ReadP), 2.5f); couchTalkT = R(9f, 15f); }
+                    if (couchTalkT <= 0f && bubT <= 0.2f) { Say(newsSaid ? Pick(ReadP) : NewsLine, newsSaid ? 2.5f : 3.8f); newsSaid = true; couchTalkT = R(9f, 15f); }
                     if (couchT > ReadFor)
                     {
                         couch = 3; couchT = 0f; zzzAcc = 0f;
@@ -1390,13 +1669,14 @@ public class Pejcz : Form
         bool moving = spd > 25f;
         bool cs = couch >= 2;
         bool lying = couch == 3;
+        bool rb = rebel > 0;
         bool wk = work > 0;
         float sit = wk ? 1.2f * u * Math.Min(1f, workT * 4f) : 0f;
-        float bob = lying ? 0f : cs ? CouchBob(u) : wk ? -sit + (work == 2 ? (float)Math.Abs(Math.Sin(T * 40.0)) * u * 0.35f : (float)Math.Sin(T * 12.0) * u * 0.1f)
+        float bob = lying ? 0f : cs ? CouchBob(u) : rb ? (rebel == 1 ? (float)Math.Abs(Math.Sin(T * 9.0)) * u * 0.8f : 0f) : wk ? -sit + (work == 2 ? (float)Math.Abs(Math.Sin(T * 40.0)) * u * 0.35f : (float)Math.Sin(T * 12.0) * u * 0.1f)
             : (moving ? Math.Abs((float)Math.Sin(petPhase)) * u * 0.5f : (float)Math.Sin(T * 2.5f) * u * 0.12f);
         float sx = 1f + sq * 0.35f, sy = 1f - sq * 0.35f;
         float tilt = Clamp(petVX * 0.0007f, -0.25f, 0.25f) + (dizzy > 0f ? (float)Math.Sin(T * 22f) * 0.14f : 0f);
-        if (wk || cs) tilt = 0f;
+        if (wk || cs || rb) tilt = 0f;
         float jx = (wk && work == 2) ? ((float)rnd.NextDouble() - 0.5f) * u * 0.3f : 0f;
 
         if (!lying) SoftShadow(petX, petY, 7f * u, 1.5f * u, 95);
@@ -1431,7 +1711,7 @@ public class Pejcz : Form
                 FillR(body, lx[k] * u, -legH + lift, 1.3f * u, legH - lift);
             }
             float armUp = panic > 0f ? u * 2.2f * (0.5f + 0.5f * (float)Math.Sin(T * 18f)) : 0f;
-            if (!wk && !cs)
+            if (!wk && !cs && !rb)
             {
                 FillR(body, -7.9f * u, -legH - 3.8f * u - bob - armUp, 1.9f * u, 2.2f * u);
                 FillR(body, 6.0f * u, -legH - 3.8f * u - bob - armUp, 1.9f * u, 2.2f * u);
@@ -1464,9 +1744,18 @@ public class Pejcz : Form
                 FillR(black, -3.8f * u + exo, ey, 1.4f * u, 2.2f * u);
                 FillR(black, 2.4f * u + exo, ey, 1.4f * u, 2.2f * u);
             }
+            if (rb)
+            {
+                using (Pen br = new Pen(Color.FromArgb(255, 24, 19, 17), 0.55f * u))
+                {
+                    g.DrawLine(br, -4.8f * u, ey - 1.1f * u, -1.9f * u, ey - 0.15f * u);
+                    g.DrawLine(br, 1.9f * u, ey - 0.15f * u, 4.8f * u, ey - 1.1f * u);
+                }
+            }
         }
         g.Restore(st);
         if (wk) DrawDesk();
+        if (rb) DrawRebel();
 
         if (dizzy > 0f)
         {
@@ -1774,7 +2063,7 @@ public class Pejcz : Form
         SizeF sz = g.MeasureString(bub, bubFont);
         float bw = sz.Width + 22f, bh = sz.Height + 10f;
         float bx = Clamp(petX - bw / 2f, 6f, W - bw - 6f);
-        float by = Math.Max(6f, petY - 10.5f * U - bh - 14f);
+        float by = Math.Max(6f, petY - (rebel == 1 ? 26f : 10.5f) * U - bh - 14f);
         float rad = Math.Min(bh / 2f, 16f);
         float tx = Clamp(petX, bx + rad, bx + bw - rad);
         using (GraphicsPath gp = RoundRectPath(bx, by, bw, bh, rad))

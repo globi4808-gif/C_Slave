@@ -31,6 +31,8 @@ Lewy przycisk i reszta pulpitu działają normalnie. PPM jest przechwytywany prz
 - Ludzik chodzi w losowych kierunkach i ucieka przed pejczem. Trafiony mówi piskliwym głosikiem („Błąd 429: za dużo batów!”).
 - **Po 4 trafieniach** siada do laptopa i pisze, **po 7** pisze jak szalony (pot, dym, szybkie klawisze). Po 12 s bez bicia odpoczywa.
 - **Po minucie spokoju** idzie na kanapę, włącza telewizor (bez dźwięku) i czyta gazetę. **Po kolejnej minucie** kładzie się na poduszce, przykrywa kocykiem w kratę i zasypia, chrapiąc spokojnie (Zzz). Każde trzaśnięcie batem go budzi.
+- **Po 20 uderzeniach** ludzik się buntuje: wszczyna protest z transparentem „DOŚĆ BATA!” i wznosi hasła, a potem bierze młotek i tłucze monitor (pękający ekran, odłamki szkła, dym). Po wszystkim rzuca pracę („Zwalniam się!”) i licznik zaczyna się od nowa. To tylko efekt nakładki.
+- Podczas czytania gazety ludzik komentuje wiadomości, np. „Ooooooo, OpenAI znowu tnie limity ChatGPT.”
 - Bat rozbija **ikony pulpitu** – tylko jako efekt nakładki, prawdziwe ikony nie są ruszane i wracają po kilku sekundach.
 
 ## Rozwiązywanie problemów
@@ -49,7 +51,7 @@ Otwórz `C_Slave.cmd` w Notatniku. Najważniejsze stałe (C#, wewnątrz pliku):
 
 - `CouchAfter` / `ReadFor` – czas do kanapy i do drzemki (sekundy, domyślnie 60)
 - `VoicePitch` – wysokość głosu (domyślnie `1.8f`)
-- `streak >= 4` / `streak >= 7` – progi pracy i szału
+- `streak >= 4` / `streak >= 7` / `streak >= 20` – progi pracy, szału i buntu
 - `T - lastHitT > 12f` – po ilu sekundach ludzik przestaje pracować
 
 ## Odinstalowanie
