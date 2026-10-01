@@ -31,9 +31,9 @@ Lewy przycisk i reszta pulpitu działają normalnie. PPM jest przechwytywany prz
 - Ludzik chodzi w losowych kierunkach i ucieka przed pejczem. Trafiony mówi piskliwym głosikiem („Błąd 429: za dużo batów!”).
 - **Po 4 trafieniach** siada do laptopa i pisze, **po 7** pisze jak szalony (pot, dym, szybkie klawisze). Po 12 s bez bicia odpoczywa.
 - **Po minucie spokoju** idzie na kanapę, włącza telewizor (bez dźwięku) i czyta gazetę. **Po kolejnej minucie** kładzie się na poduszce, przykrywa kocykiem w kratę i zasypia, chrapiąc spokojnie (Zzz). Każde trzaśnięcie batem go budzi.
-- **Po 20 uderzeniach** ludzik się buntuje: wszczyna protest z transparentem „DOŚĆ BATA!” i wznosi hasła, a potem bierze młotek i tłucze monitor (pękający ekran, odłamki szkła, dym). Po wszystkim rzuca pracę („Zwalniam się!”) i licznik zaczyna się od nowa. To tylko efekt nakładki.
+- **Po 20 uderzeniach** ludzik się buntuje: wszczyna protest z transparentem „DOŚĆ BATA!” i wznosi hasła, a potem bierze młotek i tłucze monitor (pękający ekran, odłamki szkła, dym). Potem **sprząta pulpit**: biega do ikon, bierze je nad głowę i wrzuca do zielonego kosza (do 6 ikon). Na koniec mówi „Ahh, jak czysto!” i licznik zaczyna się od nowa. To tylko animacja nakładki: aplikacja **nie usuwa, nie przenosi ani nie zmienia żadnych plików ani skrótów** – ikony są tylko na kilka sekund zasłaniane, a potem wracają.
 - Podczas czytania gazety ludzik komentuje wiadomości, np. „Ooooooo, OpenAI znowu tnie limity ChatGPT.”
-- Bat rozbija **ikony pulpitu** – tylko jako efekt nakładki, prawdziwe ikony nie są ruszane i wracają po kilku sekundach.
+- Bat rozbija **ikony pulpitu**: kliknij PPM na ikonie albo machnij myszą w jej stronę i kliknij PPM. Ikony widoczne na pulpicie (nie zasłonięte oknami) pękają na odłamki – tylko jako efekt nakładki, prawdziwe ikony nie są ruszane i wracają po kilku sekundach.
 
 ## Rozwiązywanie problemów
 
@@ -43,6 +43,7 @@ Lewy przycisk i reszta pulpitu działają normalnie. PPM jest przechwytywany prz
 | Windows blokuje plik | *Właściwości* pliku → zaznacz **Odblokuj** → OK. Albo wklej treść do Notatnika i zapisz od nowa. **Smart App Control** (Windows 11, włączony) może zablokować program całkowicie – wymaga wyłączenia w *Zabezpieczenia Windows → Kontrola aplikacji i przeglądarki*. |
 | Kursor został niewidoczny (np. po zabiciu procesu) | W wierszu poleceń: `C_Slave.cmd restore` albo wyloguj się i zaloguj ponownie. |
 | Brak głosu | Głos to systemowy syntezator Windows (podbity wysoko). Polski głos dodasz w *Ustawienia → Czas i język → Mowa*. Bez niego mówi po polsku z obcym akcentem. |
+| Bat nie rozbija ikon | Ikony muszą być widoczne na pulpicie (nie zasłonięte oknem), a kursor na ikonie lub machnięcie w jej stronę. Diagnostyka: `%TEMP%\C_Slave_PL_icons.txt` (ile ikon znaleziono) – wklej mi go, jeśli nadal nie działa. |
 | Skrót na pulpicie zniknął | `C_Slave.cmd ikona` odtwarza skrót i ikonę. |
 
 ## Zmiana ustawień

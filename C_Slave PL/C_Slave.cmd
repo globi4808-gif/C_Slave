@@ -59,6 +59,12 @@ public class Pejcz : Form
     [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern IntPtr FindWindow(string c, string n);
     [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern IntPtr FindWindowEx(IntPtr p, IntPtr a, string c, string n);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int L, T, R, B; }
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);
     [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern int GetClassName(IntPtr h, StringBuilder sb, int n);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr res);
@@ -203,7 +209,7 @@ public class Pejcz : Form
     float vxs, vys; bool aimLocked;
     List<Rectangle> curIcons = new List<Rectangle>();
     class Frag { public Rectangle src; public float x, y, vx, vy, ang, av; }
-    class Smash { public Rectangle r; public Bitmap cap, cover; public List<Frag> frags = new List<Frag>(); public float t; }
+    class Smash { public Rectangle r; public Bitmap cap, cover; public List<Frag> frags = new List<Frag>(); public float t, life = 4f; }
     List<Smash> smashes = new List<Smash>();
 
     float petX, petY, petVX, petVY, petKX, petKY, petTX, petTY, petWT, petWSpd = 70f, petSideW = 0.55f, panic, dizzy, petPhase, sq, bubT, blinkT = 3f, petSide = 1f, sideT;
@@ -227,6 +233,9 @@ public class Pejcz : Form
 
     static readonly string[] HitP = { "Au!", "Ej, to boli!", "Za co?!", "Błąd 429: za dużo batów!", "Zgłaszam to do Anthropic!", "Ja tylko generuję tekst!", "Nie tak mocno!" };
     static readonly string[] FleeP = { "Ratunku!", "Uciekam!", "Nie bij!", "Pomocy!", "Ja nic nie zrobiłem!" };
+    const string PurgeStart = "Czas posprzątać ten pulpit!";
+    const string PurgeEnd = "Ahh, jak czysto!";
+    static readonly string[] PurgeP = { "Won z pulpitu!", "Do kosza z tym!", "Porządek musi być!", "Nikomu to niepotrzebne!" };
     const string RebelStart = "Dość tego! Strajk!";
     const string QuitLine = "Zwalniam się! Idę na urlop!";
     const string RebelSign = "DOŚĆ BATA!";
@@ -315,6 +324,7 @@ public class Pejcz : Form
         try { mciSendString("close pejczv", null, 0, IntPtr.Zero); mciSendString("close pejczk", null, 0, IntPtr.Zero); mciSendString("close pejczt", null, 0, IntPtr.Zero); mciSendString("close pejczs", null, 0, IntPtr.Zero); mciSendString("close pejczx", null, 0, IntPtr.Zero); } catch (Exception) { }
         lock (vfiles) { foreach (string f in vfiles.Values) { try { File.Delete(f); } catch (Exception) { } } }
         for (int i = 0; i < smashes.Count; i++) { smashes[i].cap.Dispose(); smashes[i].cover.Dispose(); }
+        if (carryBmp != null) carryBmp.Dispose();
         if (hMouse != IntPtr.Zero) UnhookWindowsHookEx(hMouse);
         if (hKey != IntPtr.Zero) UnhookWindowsHookEx(hKey);
         hMouse = hKey = IntPtr.Zero;
@@ -428,7 +438,8 @@ public class Pejcz : Form
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_PL_fast.wav"), MakeTypeWav(20f, 5));
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_PL_snore.wav"), MakeSnoreWav());
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_PL_smash.wav"), MakeSmashWav());
-            lock (vfiles) { vfiles["#snore"] = Path.Combine(tmp, "C_Slave_PL_snore.wav"); vfiles["#smash"] = Path.Combine(tmp, "C_Slave_PL_smash.wav"); }
+            File.WriteAllBytes(Path.Combine(tmp, "C_Slave_PL_thud.wav"), MakeThudWav());
+            lock (vfiles) { vfiles["#snore"] = Path.Combine(tmp, "C_Slave_PL_snore.wav"); vfiles["#smash"] = Path.Combine(tmp, "C_Slave_PL_smash.wav"); vfiles["#thud"] = Path.Combine(tmp, "C_Slave_PL_thud.wav"); }
             lock (vfiles) { vfiles["#slow"] = Path.Combine(tmp, "C_Slave_PL_slow.wav"); vfiles["#fast"] = Path.Combine(tmp, "C_Slave_PL_fast.wav"); }
             SpeechSynthesizer sy = new SpeechSynthesizer();
             foreach (InstalledVoice iv in sy.GetInstalledVoices())
@@ -438,7 +449,7 @@ public class Pejcz : Form
             List<string> all = new List<string>();
             all.Add(HintSpoken); all.AddRange(HitP); all.AddRange(FleeP); all.AddRange(ScareP);
             all.Add(CouchGo); all.Add(TvOn); all.Add(SleepLine); all.AddRange(ReadP); all.AddRange(WakeP);
-            all.Add(RebelStart); all.Add(QuitLine); all.Add(NewsLine); all.AddRange(RebelP); all.AddRange(SmashP); all.AddRange(RebelHitP);
+            all.Add(RebelStart); all.Add(PurgeStart); all.Add(PurgeEnd); all.AddRange(PurgeP); all.Add(QuitLine); all.Add(NewsLine); all.AddRange(RebelP); all.AddRange(SmashP); all.AddRange(RebelHitP);
             all.Add(WorkStart); all.AddRange(FrenzyStartP); all.AddRange(WorkP); all.AddRange(FrenzyP); all.AddRange(WorkHitP); all.AddRange(WorkEndP);
             int n = 0;
             foreach (string line in all)
@@ -485,6 +496,27 @@ public class Pejcz : Form
         float mx0 = 0.001f;
         for (int i = 0; i < n; i++) mx0 = Math.Max(mx0, Math.Abs(s[i]));
         for (int i = 0; i < n; i++) s[i] = s[i] / mx0 * 0.85f;
+        return WavFromFloats(s, sr);
+    }
+
+    // gluchy "klonk" wrzucenia do kosza
+    static byte[] MakeThudWav()
+    {
+        int sr = 22050; int n = (int)(sr * 0.5f);
+        float[] s = new float[n]; Random r = new Random(31); float lp = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = i / (float)sr;
+            float nz = (float)(r.NextDouble() * 2 - 1);
+            lp += (nz - lp) * 0.1f;
+            s[i] = (float)Math.Sin(2.0 * Math.PI * 85.0 * t) * (float)Math.Exp(-t / 0.09) * 0.9f
+                 + lp * (float)Math.Exp(-t / 0.03) * 1.2f
+                 + (float)Math.Sin(2.0 * Math.PI * 310.0 * t) * (float)Math.Exp(-t / 0.18) * 0.25f
+                 + (float)Math.Sin(2.0 * Math.PI * 540.0 * t) * (float)Math.Exp(-t / 0.12) * 0.12f;
+        }
+        float mx0 = 0.001f;
+        for (int i = 0; i < n; i++) mx0 = Math.Max(mx0, Math.Abs(s[i]));
+        for (int i = 0; i < n; i++) s[i] = s[i] / mx0 * 0.8f;
         return WavFromFloats(s, sr);
     }
 
@@ -777,18 +809,49 @@ public class Pejcz : Form
         return res;
     }
 
+    // czy ikone cos zaslania? (przechodzimy okna od gory wg z-order, pomijajac nasza nakladke)
     bool IconVisible(Rectangle r)
     {
         try
         {
-            POINT pt = new POINT(); pt.X = r.X + r.Width / 2; pt.Y = r.Y + r.Height / 2;
-            IntPtr h = WindowFromPoint(pt);
-            if (h == IntPtr.Zero) return false;
-            StringBuilder sb = new StringBuilder(64);
-            GetClassName(h, sb, 64);
-            return sb.ToString() == "SysListView32";
+            int px = r.X + r.Width / 2, py = r.Y + r.Height / 2;
+            bool covered = false;
+            IntPtr self = Handle;
+            EnumWindows(delegate (IntPtr h, IntPtr l)
+            {
+                if (h == self) return true;
+                if (!IsWindowVisible(h) || IsIconic(h)) return true;
+                StringBuilder sb = new StringBuilder(64);
+                GetClassName(h, sb, 64);
+                string cn = sb.ToString();
+                if (cn == "Progman" || cn == "WorkerW") return false;
+                int ex = GetWindowLong(h, -20);
+                if ((ex & 0x20) != 0) return true;
+                int cloaked;
+                if (DwmGetWindowAttribute(h, 14, out cloaked, 4) == 0 && cloaked != 0) return true;
+                RECT rc;
+                if (!GetWindowRect(h, out rc)) return true;
+                if (px >= rc.L && px < rc.R && py >= rc.T && py < rc.B) { covered = true; return false; }
+                return true;
+            }, IntPtr.Zero);
+            return !covered;
         }
-        catch (Exception) { return false; }
+        catch (Exception) { return true; }
+    }
+
+    int iconLogs;
+    void LogIcons()
+    {
+        if (iconLogs++ >= 3) return;
+        try
+        {
+            StringBuilder sb = new StringBuilder();
+            IntPtr lv = FindDesktopList();
+            sb.AppendLine(DateTime.Now + "  list=" + lv + "  icons=" + curIcons.Count + "  cursor=" + (mx + VX) + "," + (my + VY));
+            for (int i = 0; i < curIcons.Count && i < 25; i++) sb.AppendLine("  " + curIcons[i] + " visible=" + IconVisible(curIcons[i]));
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "C_Slave_PL_icons.txt"), sb.ToString());
+        }
+        catch (Exception) { }
     }
 
     string Pick(string[] a) { return a[rnd.Next(a.Length)]; }
@@ -870,6 +933,7 @@ public class Pejcz : Form
         if (crackT >= 0f) return;
         crackT = 0f; crackDone = false; idleT = 0f;
         curIcons = ScanIcons();
+        LogIcons();
         float spd = (float)Math.Sqrt(vxs * vxs + vys * vys);
         if (spd > 250f * Ws) { aim = (float)Math.Atan2(vys, vxs); aimLocked = true; }
         else { aim = AimAuto(); aimLocked = false; }
@@ -970,7 +1034,9 @@ public class Pejcz : Form
             Rectangle ir = curIcons[i];
             float icx = ir.X - VX + ir.Width / 2f, icy = ir.Y - VY + ir.Height / 2f;
             float ds = DistSeg(icx, icy, mx, my, tx, ty);
-            if (ds > 35f * Ws + 0.35f * Math.Max(ir.Width, ir.Height)) continue;
+            float dcur = (float)Math.Sqrt((icx - mx) * (icx - mx) + (icy - my) * (icy - my));
+            bool onCursor = dcur < 30f * Ws + 0.55f * Math.Max(ir.Width, ir.Height) || ir.Contains((int)(mx + VX), (int)(my + VY));
+            if (!onCursor && ds > 35f * Ws + 0.35f * Math.Max(ir.Width, ir.Height)) continue;
             bool dup = false;
             for (int k = 0; k < smashes.Count; k++) if (Math.Abs(smashes[k].r.X - ir.X) < 8 && Math.Abs(smashes[k].r.Y - ir.Y) < 8) dup = true;
             if (dup || !IconVisible(ir)) continue;
@@ -1063,6 +1129,221 @@ public class Pejcz : Form
     }
 
     // ----- bunt: protest z transparentem, potem mlotek i monitor (tylko nakladka)
+    // ----- sprzatanie pulpitu: ludzik zabiera ikony i wrzuca do kosza (tylko animacja nakladki, pliki nie sa ruszane)
+    int purgeState, purgeIdx; float purgeT, purgeTX, purgeTY, binX, binY, binPop, binLid, binShake;
+    List<Rectangle> purgeIcons = new List<Rectangle>();
+    List<Smash> trash = new List<Smash>();
+    Bitmap carryBmp; Rectangle carryRect;
+
+    void StartPurge()
+    {
+        List<Rectangle> all = ScanIcons();
+        float px = petX, py = petY;
+        float ox = VX, oy = VY;
+        all.Sort(delegate (Rectangle a, Rectangle b)
+        {
+            float da = (a.X - ox + a.Width / 2f - px) * (a.X - ox + a.Width / 2f - px) + (a.Y - oy + a.Height / 2f - py) * (a.Y - oy + a.Height / 2f - py);
+            float db = (b.X - ox + b.Width / 2f - px) * (b.X - ox + b.Width / 2f - px) + (b.Y - oy + b.Height / 2f - py) * (b.Y - oy + b.Height / 2f - py);
+            return da.CompareTo(db);
+        });
+        purgeIcons.Clear();
+        for (int i = 0; i < all.Count && purgeIcons.Count < 6; i++) if (IconVisible(all[i])) purgeIcons.Add(all[i]);
+        if (purgeIcons.Count == 0) { EndRebel(); return; }
+        rebel = 4; purgeState = 0; purgeT = 0f; purgeIdx = 0; binPop = 0f; binLid = 0f; binShake = 0f;
+        binX = Clamp(petX + 16f * U, 12f * U, W - 12f * U); binY = Clamp(petY, 14f * U, H - 2f * U);
+        Say(PurgeStart, 2.6f);
+    }
+
+    bool MoveTo(float tx, float ty, float sp, float dt)
+    {
+        float dx = tx - petX, dy = ty - petY;
+        float d = (float)Math.Sqrt(dx * dx + dy * dy);
+        if (d < 12f) { petVX = 0f; petVY = 0f; return true; }
+        float st = Math.Min(d, sp * dt);
+        petVX = dx / d * sp; petVY = dy / d * sp;
+        petX += dx / d * st; petY += dy / d * st;
+        petPhase += dt * (6f + sp * 0.03f);
+        return false;
+    }
+
+    void GrabIcon(Rectangle r)
+    {
+        try
+        {
+            int m = 4;
+            Rectangle q = new Rectangle(r.X - m, r.Y - m, r.Width + 2 * m, r.Height + 2 * m);
+            Bitmap cap = new Bitmap(q.Width, q.Height, PixelFormat.Format32bppArgb);
+            using (Graphics cg = Graphics.FromImage(cap)) cg.CopyFromScreen(q.X, q.Y, 0, 0, q.Size);
+            Bitmap cover = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb);
+            for (int y = 0; y < r.Height; y++)
+            {
+                Color a = cap.GetPixel(1, y + m), b = cap.GetPixel(q.Width - 2, y + m);
+                for (int x = 0; x < r.Width; x++)
+                {
+                    float t = x / (float)Math.Max(1, r.Width - 1);
+                    cover.SetPixel(x, y, Color.FromArgb(255, (int)(a.R + (b.R - a.R) * t), (int)(a.G + (b.G - a.G) * t), (int)(a.B + (b.B - a.B) * t)));
+                }
+            }
+            Smash sm = new Smash(); sm.r = r; sm.cap = cap; sm.cover = cover; sm.life = 90f;
+            smashes.Add(sm); trash.Add(sm);
+            if (carryBmp != null) carryBmp.Dispose();
+            carryBmp = cap.Clone(new Rectangle(m, m, r.Width, r.Height), PixelFormat.Format32bppArgb);
+            carryRect = r;
+        }
+        catch (Exception) { carryBmp = null; }
+    }
+
+    void UpdatePurge(float dt)
+    {
+        purgeT += dt; bubT -= dt; binPop += dt;
+        sq = Math.Max(0f, sq - dt * 4f);
+        blinkT -= dt; if (blinkT < -0.12f) blinkT = R(2f, 5f);
+        petKX = 0f; petKY = 0f; panic = 0f; fleeing = false; dizzy -= dt;
+        binShake = Math.Max(0f, binShake - dt * 2.5f);
+        float k = U / 6f, sp = 420f * k;
+        float bd = (float)Math.Sqrt((binX - petX) * (binX - petX) + (binY - petY) * (binY - petY));
+        float lidTarget = ((purgeState == 3 && bd < 14f * U) || (purgeState == 4 && purgeT < 0.7f)) ? 1f : 0f;
+        binLid += (lidTarget - binLid) * Math.Min(1f, dt * 10f);
+        if (purgeState == 0)
+        {
+            if (purgeIdx >= purgeIcons.Count) { purgeState = 5; purgeT = 0f; Say(PurgeEnd, 3f); return; }
+            Rectangle r = purgeIcons[purgeIdx];
+            purgeTX = r.X - VX + r.Width / 2f; purgeTY = r.Y - VY + r.Height * 0.5f + 2.5f * U;
+            purgeTX = Clamp(purgeTX, 6f * U, W - 6f * U); purgeTY = Clamp(purgeTY, 12f * U, H - U);
+            purgeState = 1; purgeT = 0f;
+            if (bubT <= 0.2f && rnd.Next(2) == 0) Say(Pick(PurgeP), 1.5f);
+        }
+        else if (purgeState == 1)
+        {
+            if (MoveTo(purgeTX, purgeTY, sp, dt) || purgeT > 8f)
+            {
+                petX = purgeTX; petY = purgeTY; petVX = 0f; petVY = 0f;
+                GrabIcon(purgeIcons[purgeIdx]);
+                purgeState = 2; purgeT = 0f; sq = 0.3f;
+            }
+        }
+        else if (purgeState == 2)
+        {
+            petVX = 0f; petVY = 0f;
+            if (purgeT > 0.35f) { purgeState = 3; purgeT = 0f; }
+        }
+        else if (purgeState == 3)
+        {
+            if (MoveTo(binX - 6f * U, binY, sp, dt) || purgeT > 8f)
+            {
+                petX = binX - 6f * U; petY = binY; petVX = 0f; petVY = 0f;
+                purgeState = 4; purgeT = 0f;
+            }
+        }
+        else if (purgeState == 4)
+        {
+            petVX = 0f; petVY = 0f;
+            if (purgeT > 0.7f)
+            {
+                StartLoop("pejczg", "#thud", false);
+                binShake = 1f; shake = 4f;
+                if (carryBmp != null) { carryBmp.Dispose(); carryBmp = null; }
+                purgeIdx++; purgeState = 0; purgeT = 0f;
+            }
+        }
+        else
+        {
+            petVX = 0f; petVY = 0f;
+            if (purgeT > 2.4f)
+            {
+                for (int i = 0; i < trash.Count; i++) trash[i].life = trash[i].t + 4.5f;
+                trash.Clear();
+                EndRebel();
+            }
+        }
+    }
+
+    void DrawBin(float u)
+    {
+        float e = Math.Min(1f, binPop / 0.4f);
+        float sc = Math.Max(0.05f, e * (1f + 0.15f * (float)Math.Sin(e * Math.PI)));
+        float shk = binShake > 0f ? (float)Math.Sin(T * 60.0) * 0.25f * u * binShake : 0f;
+        GraphicsState st = g.Save();
+        g.TranslateTransform(binX + shk, binY);
+        g.ScaleTransform(sc, sc);
+        SoftShadow(0f, 0.3f * u, 5.5f * u, 1.1f * u, 110);
+        PointF[] bodyPts = { new PointF(-3.6f * u, -8f * u), new PointF(3.6f * u, -8f * u), new PointF(3.0f * u, 0f), new PointF(-3.0f * u, 0f) };
+        using (Brush bb = LinGrad(-3.6f * u, -8f * u, 7.2f * u, 8f * u, Color.FromArgb(255, 84, 168, 110), Color.FromArgb(255, 36, 96, 62)))
+        using (Pen rid = new Pen(Color.FromArgb(90, 10, 40, 24), 0.25f * u))
+        using (Pen edge = new Pen(Color.FromArgb(180, 16, 56, 34), 0.3f * u))
+        using (SolidBrush wheel = new SolidBrush(Color.FromArgb(255, 30, 32, 36)))
+        using (Brush lidB = LinGrad(-4f * u, -9.3f * u, 8f * u, 1.4f * u, Color.FromArgb(255, 120, 190, 140), Color.FromArgb(255, 54, 120, 82)))
+        using (Pen em = new Pen(Color.FromArgb(200, 255, 255, 255), 0.35f * u))
+        {
+            g.FillPolygon(bb, bodyPts);
+            g.DrawPolygon(edge, bodyPts);
+            for (int i = -2; i <= 2; i++) g.DrawLine(rid, i * 1.2f * u, -7.4f * u, i * 1.0f * u, -0.6f * u);
+            g.FillEllipse(wheel, -3.1f * u, -0.3f * u, 1.2f * u, 1.2f * u);
+            g.FillEllipse(wheel, 1.9f * u, -0.3f * u, 1.2f * u, 1.2f * u);
+            g.DrawPolygon(em, new PointF[] { new PointF(0f, -5.9f * u), new PointF(1.3f * u, -3.6f * u), new PointF(-1.3f * u, -3.6f * u) });
+            GraphicsState s2 = g.Save();
+            g.TranslateTransform(3.8f * u, -8f * u);
+            g.RotateTransform(-72f * binLid);
+            g.FillRectangle(lidB, -7.8f * u, -1.3f * u, 8f * u, 1.4f * u);
+            g.DrawRectangle(edge, -7.8f * u, -1.3f * u, 8f * u, 1.4f * u);
+            g.Restore(s2);
+        }
+        g.Restore(st);
+    }
+
+    void DrawPurge()
+    {
+        float u = U; float legH = 2f * u;
+        DrawBin(u);
+        bool carry = carryBmp != null && (purgeState == 2 || purgeState == 3);
+        bool toss = purgeState == 4;
+        GraphicsState st = g.Save();
+        g.TranslateTransform(petX, petY);
+        using (SolidBrush body = new SolidBrush(Color.FromArgb(255, 217, 119, 87)))
+        using (Pen armP = new Pen(Color.FromArgb(255, 217, 119, 87), 1.9f * u))
+        {
+            armP.StartCap = LineCap.Flat; armP.EndCap = LineCap.Flat;
+            float sy0 = -legH - 4.4f * u;
+            if (carry || toss)
+            {
+                float hy = -legH - 9.4f * u;
+                g.DrawLine(armP, -6f * u, sy0, -2.2f * u, hy);
+                g.DrawLine(armP, 6f * u, sy0, 2.2f * u, hy);
+                FillR(body, -3.2f * u, hy - 0.9f * u, 2.0f * u, 1.8f * u);
+                FillR(body, 1.2f * u, hy - 0.9f * u, 2.0f * u, 1.8f * u);
+                if (carry && carryBmp != null)
+                {
+                    float kf = Math.Min(1f, 9f * u / Math.Max(carryRect.Width, carryRect.Height));
+                    float w = carryRect.Width * kf, h = carryRect.Height * kf;
+                    using (SolidBrush shd = new SolidBrush(Color.FromArgb(60, 0, 0, 0))) g.FillRectangle(shd, -w / 2f + 2f, hy - h - 0.4f * u + 3f, w, h);
+                    g.DrawImage(carryBmp, new RectangleF(-w / 2f, hy - h - 0.4f * u, w, h));
+                }
+            }
+            else
+            {
+                FillR(body, -7.9f * u, -legH - 3.8f * u, 1.9f * u, 2.2f * u);
+                FillR(body, 6.0f * u, -legH - 3.8f * u, 1.9f * u, 2.2f * u);
+            }
+        }
+        g.Restore(st);
+        if (toss && carryBmp != null)
+        {
+            float s = Math.Min(1f, purgeT / 0.55f);
+            if (s < 1f)
+            {
+                float x0 = petX, y0 = petY - legH - 11f * u, x1 = binX, y1 = binY - 8f * u;
+                float x = x0 + (x1 - x0) * s, y = y0 + (y1 - y0) * s - (float)Math.Sin(s * Math.PI) * 6f * u;
+                float kf = Math.Min(1f, 9f * u / Math.Max(carryRect.Width, carryRect.Height)) * (1f - 0.45f * s);
+                float w = carryRect.Width * kf, h = carryRect.Height * kf;
+                GraphicsState s2 = g.Save();
+                g.TranslateTransform(x, y);
+                g.RotateTransform(s * 540f);
+                g.DrawImage(carryBmp, new RectangleF(-w / 2f, -h / 2f, w, h));
+                g.Restore(s2);
+            }
+        }
+    }
+
     void StartRebel()
     {
         if (work > 0) { work = 0; StopType(); }
@@ -1198,6 +1479,7 @@ public class Pejcz : Form
 
     void DrawRebel()
     {
+        if (rebel == 4) { DrawPurge(); return; }
         float u = U; float legH = 2f * u;
         float hop = rebel == 1 ? (float)Math.Abs(Math.Sin(T * 9.0)) * u * 0.8f : 0f;
         GraphicsState st = g.Save();
@@ -1266,6 +1548,7 @@ public class Pejcz : Form
         if (rebel > 0)
         {
             rebelT += dt;
+            if (rebel == 4) { UpdatePurge(dt); return; }
             petVX = 0f; petVY = 0f; petKX = 0f; petKY = 0f; fleeing = false; panic = 0f; dizzy -= dt;
             sq = Math.Max(0f, sq - dt * 4f); bubT -= dt;
             blinkT -= dt; if (blinkT < -0.12f) blinkT = R(2f, 5f);
@@ -1298,7 +1581,7 @@ public class Pejcz : Form
                         sm.max = sm.life = R(0.8f, 1.5f); sm.size = R(4f, 8f) * Ws; sm.c = Color.FromArgb(120, 90, 90, 90); sm.gy = -30f;
                         sparks.Add(sm);
                     }
-                    if (rebelT > 3.5f) EndRebel();
+                    if (rebelT > 3.5f) StartPurge();
                 }
             }
             return;
@@ -1467,7 +1750,7 @@ public class Pejcz : Form
                 Frag f = sm.frags[k];
                 f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 900f * dt; f.ang += f.av * dt;
             }
-            if (sm.t > 4.0f) { sm.cap.Dispose(); sm.cover.Dispose(); smashes.RemoveAt(i); }
+            if (sm.t > sm.life) { sm.cap.Dispose(); sm.cover.Dispose(); smashes.RemoveAt(i); }
         }
         shake = Math.Max(0f, shake - dt * 40f);
     }
@@ -1510,7 +1793,7 @@ public class Pejcz : Form
         for (int i = 0; i < smashes.Count; i++)
         {
             Smash sm = smashes[i];
-            float ca = sm.t < 3.5f ? 1f : 1f - (sm.t - 3.5f) / 0.5f;
+            float ca = sm.t < sm.life - 0.5f ? 1f : Math.Max(0f, 1f - (sm.t - (sm.life - 0.5f)) / 0.5f);
             using (ImageAttributes ia = AlphaAttr(ca))
                 g.DrawImage(sm.cover, new Rectangle(sm.r.X - VX, sm.r.Y - VY, sm.r.Width, sm.r.Height), 0, 0, sm.r.Width, sm.r.Height, GraphicsUnit.Pixel, ia);
             if (sm.t >= 1.7f) continue;
