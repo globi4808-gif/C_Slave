@@ -30,7 +30,7 @@ Lewy przycisk i reszta pulpitu działają normalnie. PPM jest przechwytywany prz
 
 - Ludzik chodzi w losowych kierunkach i ucieka przed pejczem. Trafiony mówi piskliwym głosikiem („Błąd 429: za dużo batów!”).
 - **Po 4 trafieniach** siada do laptopa i pisze, **po 7** pisze jak szalony (pot, dym, szybkie klawisze). Po 12 s bez bicia odpoczywa.
-- **Po minucie spokoju** idzie na kanapę, włącza telewizor i czyta gazetę. **Po kolejnej minucie** zasypia i chrapie (Zzz). Każde trzaśnięcie batem go budzi.
+- **Po minucie spokoju** idzie na kanapę, włącza telewizor (bez dźwięku) i czyta gazetę. **Po kolejnej minucie** kładzie się na poduszce, przykrywa kocykiem w kratę i zasypia, chrapiąc spokojnie (Zzz). Każde trzaśnięcie batem go budzi.
 - Bat rozbija **ikony pulpitu** – tylko jako efekt nakładki, prawdziwe ikony nie są ruszane i wracają po kilku sekundach.
 
 ## Rozwiązywanie problemów

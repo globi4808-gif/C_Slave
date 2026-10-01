@@ -415,10 +415,8 @@ public class Pejcz : Form
             string tmp = Path.GetTempPath();
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_EN_slow.wav"), MakeTypeWav(7f, 3));
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_EN_fast.wav"), MakeTypeWav(20f, 5));
-            File.WriteAllBytes(Path.Combine(tmp, "C_Slave_EN_tv.wav"), MakeTvWav());
-            File.WriteAllBytes(Path.Combine(tmp, "C_Slave_EN_tvon.wav"), MakeTvOnWav());
             File.WriteAllBytes(Path.Combine(tmp, "C_Slave_EN_snore.wav"), MakeSnoreWav());
-            lock (vfiles) { vfiles["#tv"] = Path.Combine(tmp, "C_Slave_EN_tv.wav"); vfiles["#tvon"] = Path.Combine(tmp, "C_Slave_EN_tvon.wav"); vfiles["#snore"] = Path.Combine(tmp, "C_Slave_EN_snore.wav"); }
+            lock (vfiles) { vfiles["#snore"] = Path.Combine(tmp, "C_Slave_EN_snore.wav"); }
             lock (vfiles) { vfiles["#slow"] = Path.Combine(tmp, "C_Slave_EN_slow.wav"); vfiles["#fast"] = Path.Combine(tmp, "C_Slave_EN_fast.wav"); }
             SpeechSynthesizer sy = new SpeechSynthesizer();
             foreach (InstalledVoice iv in sy.GetInstalledVoices())
@@ -462,71 +460,39 @@ public class Pejcz : Form
         return ms.ToArray();
     }
 
-    // TV murmur: noise + voice "syllables"
-    static byte[] MakeTvWav()
-    {
-        int sr = 22050; int n = sr * 2;
-        float[] s = new float[n]; Random r = new Random(11);
-        float lp = 0f, a = 0f, target = 0.5f, f = 180f; double ph = 0; int next = 0;
-        for (int i = 0; i < n; i++)
-        {
-            if (i >= next) { target = (float)(0.15 + r.NextDouble() * 0.85); f = 120f + (float)r.NextDouble() * 140f; next = i + (int)(sr * (0.12 + r.NextDouble() * 0.25)); }
-            a += (target - a) * 0.002f;
-            float nz = (float)(r.NextDouble() * 2 - 1);
-            lp += (nz - lp) * 0.2f;
-            ph += 2.0 * Math.PI * f / sr;
-            s[i] = (lp * 0.9f + (float)Math.Sin(ph) * 0.35f) * a * 0.12f;
-        }
-        return WavFromFloats(s, sr);
-    }
 
-    // click + hiss of the TV switching on
-    static byte[] MakeTvOnWav()
-    {
-        int sr = 22050; int n = (int)(sr * 0.5);
-        float[] s = new float[n]; Random r = new Random(13);
-        for (int i = 0; i < n; i++)
-        {
-            float t = i / (float)sr;
-            float nz = (float)(r.NextDouble() * 2 - 1) * (float)Math.Exp(-t / 0.08) * 0.25f;
-            float th = (float)Math.Sin(2.0 * Math.PI * 60.0 * t) * (float)Math.Exp(-t / 0.05) * 0.4f;
-            s[i] = nz + th;
-        }
-        return WavFromFloats(s, sr);
-    }
 
     // snoring: inhale (noise) + exhale (buzzing, rasping tone through formant filters), normalised to a loud level
+    // chrapanie: lagodny, spokojny oddech - miekki wdech i niskie, ciche mruczenie na wydechu
     static byte[] MakeSnoreWav()
     {
-        int sr = 22050; int n = sr * 3;
-        float[] s = new float[n]; Random r = new Random(17);
-        float l1 = 0f, b1 = 0f, l2 = 0f, b2 = 0f; double ph = 0;
-        float f1 = 2f * (float)Math.Sin(Math.PI * 450.0 / sr), f2 = 2f * (float)Math.Sin(Math.PI * 1100.0 / sr);
+        int sr = 22050; int n = (int)(sr * 4.2f);
+        float[] s = new float[n]; Random r = new Random(23);
+        float lp1 = 0f; double ph = 0;
         for (int i = 0; i < n; i++)
         {
-            float t = i / (float)sr;
+            float t = i / (float)sr; float v = 0f;
             float nz = (float)(r.NextDouble() * 2 - 1);
-            float src = 0f, env = 0f;
-            if (t < 1.0f)
+            lp1 += (nz - lp1) * 0.06f;
+            if (t < 1.5f)
             {
-                env = (float)Math.Pow(Math.Sin(Math.PI * t / 1.0), 1.3) * 0.55f; src = nz;
+                float e = (float)Math.Pow(Math.Sin(Math.PI * t / 1.5), 2.0);
+                v = lp1 * e * 2.0f;
             }
-            else if (t >= 1.3f && t < 2.5f)
+            else if (t >= 1.9f && t < 3.7f)
             {
-                float u = (t - 1.3f) / 1.2f;
-                env = (float)Math.Sin(Math.PI * u);
-                ph += 2.0 * Math.PI * (62.0 + 10.0 * Math.Sin(t * 6.0)) / sr;
-                float saw = (float)((ph / (2.0 * Math.PI)) % 1.0) * 2f - 1f;
-                float flutter = 0.35f + 0.65f * (float)Math.Pow(Math.Abs(Math.Sin(2.0 * Math.PI * 18.0 * t)), 0.7);
-                src = (saw * 0.9f + nz * 0.4f) * flutter;
+                float u = (t - 1.9f) / 1.8f;
+                float e = (float)Math.Pow(Math.Sin(Math.PI * u), 1.6);
+                ph += 2.0 * Math.PI * (92.0 - 14.0 * u + 2.0 * Math.Sin(t * 7.0)) / sr;
+                float purr = (float)(Math.Sin(ph) + 0.45 * Math.Sin(2.0 * ph) + 0.2 * Math.Sin(3.0 * ph));
+                float flutter = 0.75f + 0.25f * (float)Math.Sin(2.0 * Math.PI * 11.0 * t);
+                v = (purr * 0.5f * flutter + lp1 * 1.2f) * e;
             }
-            l1 += f1 * b1; float h1 = src - l1 - 0.25f * b1; b1 += f1 * h1;
-            l2 += f2 * b2; float h2 = src - l2 - 0.30f * b2; b2 += f2 * h2;
-            s[i] = (b1 + 0.6f * b2 + 0.15f * src) * env;
+            s[i] = v;
         }
         float mx0 = 0.001f;
         for (int i = 0; i < n; i++) mx0 = Math.Max(mx0, Math.Abs(s[i]));
-        for (int i = 0; i < n; i++) s[i] = (float)Math.Tanh(s[i] / mx0 * 3.0f) * 0.9f;
+        for (int i = 0; i < n; i++) s[i] = s[i] / mx0 * 0.6f;
         return WavFromFloats(s, sr);
     }
 
@@ -1078,7 +1044,6 @@ public class Pejcz : Form
                     petX = couchX; petY = couchY; petVX = 0f; petVY = 0f;
                     couch = 2; couchT = 0f; couchTalkT = 8f; sq = 0.3f;
                     Say(TvOn, 2.5f);
-                    StartLoop("pejczx", "#tvon", false); StartLoop("pejczt", "#tv", true);
                 }
             }
             else
@@ -1104,7 +1069,7 @@ public class Pejcz : Form
                         zzzAcc = 0f;
                         FText z = new FText(); z.s = rnd.Next(3) == 0 ? "Zzz" : "Z"; z.c = Color.FromArgb(180, 205, 255);
                         if (bubT <= 0.2f && rnd.Next(2) == 0) Say("Snooore... pfff...", 1.6f, "");
-                        z.x = petX + 4f * U; z.y = petY - 9f * U; z.rise = R(35f, 55f) * Ws; texts.Add(z);
+                        z.x = petX - 3f * U; z.y = petY - 9.6f * U; z.rise = R(35f, 55f) * Ws; texts.Add(z);
                     }
                 }
             }
@@ -1303,28 +1268,51 @@ public class Pejcz : Form
 
     void DrawWhip()
     {
-        // glow during the strike
+        // blask podczas uderzenia
         if (crackT >= 0.12f && crackT < 0.3f)
         {
             PointF[] st = new PointF[N - N / 2];
             for (int i = N / 2; i < N; i++) st[i - N / 2] = new PointF(wx[i], wy[i]);
             using (Pen p = new Pen(Color.FromArgb(120, 255, 255, 255), 7f * Ws)) { p.LineJoin = LineJoin.Round; p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; g.DrawLines(p, st); }
         }
-        // braided body
-        for (int i = 3; i < N - 1; i++)
+        // zwezajace sie, plecione cialo bata
+        int a0 = 3; int m = N - a0;
+        PointF[] Lp = new PointF[m], Rp = new PointF[m], Cp = new PointF[m], Hp = new PointF[m];
+        for (int i = a0; i < N; i++)
         {
+            int j = i - a0;
+            int p0 = Math.Max(a0, i - 1), q0 = Math.Min(N - 1, i + 1);
+            float dx = wx[q0] - wx[p0], dy = wy[q0] - wy[p0];
+            float l = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (l < 1e-3f) { dx = 1f; dy = 0f; l = 1f; }
+            float nx = -dy / l, ny = dx / l;
             float t = i / (float)(N - 1);
-            float w = (6.5f - 4.8f * t) * Ws;
-            Color c = (i % 2 == 0) ? Color.FromArgb(255, 132, 78, 38) : Color.FromArgb(255, 92, 52, 24);
-            using (Pen p = new Pen(c, w)) { p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; g.DrawLine(p, wx[i], wy[i], wx[i + 1], wy[i + 1]); }
+            float hw = (7.2f - 5.2f * t) * Ws * 0.5f;
+            Cp[j] = new PointF(wx[i], wy[i]);
+            Lp[j] = new PointF(wx[i] + nx * hw, wy[i] + ny * hw);
+            Rp[j] = new PointF(wx[i] - nx * hw, wy[i] - ny * hw);
+            Hp[j] = new PointF(wx[i] + nx * hw * 0.45f, wy[i] + ny * hw * 0.45f);
         }
-        PointF[] pts = new PointF[N - 3];
-        for (int i = 3; i < N; i++) pts[i - 3] = new PointF(wx[i], wy[i]);
-        using (Pen hl = new Pen(Color.FromArgb(80, 255, 210, 150), 1.2f * Ws)) { hl.LineJoin = LineJoin.Round; g.DrawLines(hl, pts); }
+        PointF[] poly = new PointF[2 * m];
+        for (int j = 0; j < m; j++) { poly[j] = Lp[j]; poly[m + j] = Rp[m - 1 - j]; }
+        PointF[] shp = new PointF[2 * m];
+        for (int j = 0; j < 2 * m; j++) shp[j] = new PointF(poly[j].X + 3f * Ws, poly[j].Y + 5f * Ws);
+        using (SolidBrush sb = new SolidBrush(Color.FromArgb(55, 0, 0, 0))) g.FillPolygon(sb, shp);
+        using (SolidBrush lb = new SolidBrush(Color.FromArgb(255, 122, 72, 34))) g.FillPolygon(lb, poly);
+        using (Pen ep = new Pen(Color.FromArgb(210, 66, 34, 14), 1.4f * Ws)) { ep.LineJoin = LineJoin.Round; g.DrawLines(ep, Rp); }
+        using (Pen bp = new Pen(Color.FromArgb(110, 52, 26, 10), 1f))
+        {
+            for (int j = 0; j < m - 1; j++)
+            {
+                g.DrawLine(bp, Lp[j], Rp[j + 1]);
+                g.DrawLine(bp, Rp[j], Lp[j + 1]);
+            }
+        }
+        using (Pen hp = new Pen(Color.FromArgb(150, 222, 170, 108), 1.3f * Ws)) { hp.LineJoin = LineJoin.Round; g.DrawLines(hp, Hp); }
 
-        // popper at the tip
+        // popper na koncu
         float tx = wx[N - 1], ty = wy[N - 1];
-        using (Pen fp = new Pen(Color.FromArgb(230, 235, 215, 170), 1.3f * Ws))
+        using (Pen fp = new Pen(Color.FromArgb(230, 238, 220, 176), 1.3f * Ws))
         {
             for (int i = 0; i < 3; i++)
             {
@@ -1333,19 +1321,64 @@ public class Pejcz : Form
             }
         }
 
-        // handle (cursor hotspot at point 0)
+        // raczka (hotspot kursora w punkcie 0): skorzana, z zlotymi okuciami
         for (int i = 0; i < 3; i++)
         {
-            using (Pen p = new Pen(Color.FromArgb(255, 52, 32, 20), 9f * Ws)) { p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; g.DrawLine(p, wx[i], wy[i], wx[i + 1], wy[i + 1]); }
-            using (Pen p = new Pen(Color.FromArgb(120, 190, 130, 80), 1.5f * Ws)) { g.DrawLine(p, wx[i], wy[i], wx[i + 1], wy[i + 1]); }
+            using (Pen p = new Pen(Color.FromArgb(255, 48, 30, 18), 9.5f * Ws)) { p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; g.DrawLine(p, wx[i], wy[i], wx[i + 1], wy[i + 1]); }
+            using (Pen p = new Pen(Color.FromArgb(255, 86, 56, 34), 6f * Ws)) { p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; g.DrawLine(p, wx[i], wy[i], wx[i + 1], wy[i + 1]); }
+            using (Pen p = new Pen(Color.FromArgb(120, 214, 170, 120), 1.4f * Ws)) { g.DrawLine(p, wx[i] - 1.5f * Ws, wy[i] - 1.5f * Ws, wx[i + 1] - 1.5f * Ws, wy[i + 1] - 1.5f * Ws); }
         }
-        using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 212, 170, 60)))
-        using (Pen o = new Pen(Color.FromArgb(255, 90, 60, 15), 1.5f))
+        for (int i = 0; i < 3; i++)
         {
-            float r1 = 5.5f * Ws, r2 = 4.5f * Ws;
-            g.FillEllipse(b, wx[0] - r1, wy[0] - r1, r1 * 2, r1 * 2); g.DrawEllipse(o, wx[0] - r1, wy[0] - r1, r1 * 2, r1 * 2);
-            g.FillEllipse(b, wx[3] - r2, wy[3] - r2, r2 * 2, r2 * 2); g.DrawEllipse(o, wx[3] - r2, wy[3] - r2, r2 * 2, r2 * 2);
+            float dx = wx[i + 1] - wx[i], dy = wy[i + 1] - wy[i];
+            float l = (float)Math.Sqrt(dx * dx + dy * dy); if (l < 1e-3f) continue;
+            float nx = -dy / l * 4.2f * Ws, ny = dx / l * 4.2f * Ws;
+            using (Pen wp = new Pen(Color.FromArgb(150, 20, 10, 4), 1.1f * Ws))
+            {
+                float mx1 = (wx[i] + wx[i + 1]) * 0.5f, my1 = (wy[i] + wy[i + 1]) * 0.5f;
+                g.DrawLine(wp, mx1 - nx, my1 - ny, mx1 + nx, my1 + ny);
+            }
         }
+        float r1 = 5.8f * Ws, r2 = 4.8f * Ws;
+        using (Brush gb = LinGrad(wx[0] - r1, wy[0] - r1, r1 * 2, r1 * 2, Color.FromArgb(255, 255, 228, 150), Color.FromArgb(255, 170, 120, 30)))
+        using (Brush gb2 = LinGrad(wx[3] - r2, wy[3] - r2, r2 * 2, r2 * 2, Color.FromArgb(255, 255, 228, 150), Color.FromArgb(255, 170, 120, 30)))
+        using (Pen o = new Pen(Color.FromArgb(255, 96, 64, 16), 1.4f))
+        using (SolidBrush hl = new SolidBrush(Color.FromArgb(200, 255, 255, 240)))
+        {
+            g.FillEllipse(gb, wx[0] - r1, wy[0] - r1, r1 * 2, r1 * 2); g.DrawEllipse(o, wx[0] - r1, wy[0] - r1, r1 * 2, r1 * 2);
+            g.FillEllipse(hl, wx[0] - r1 * 0.55f, wy[0] - r1 * 0.6f, r1 * 0.6f, r1 * 0.5f);
+            g.FillEllipse(gb2, wx[3] - r2, wy[3] - r2, r2 * 2, r2 * 2); g.DrawEllipse(o, wx[3] - r2, wy[3] - r2, r2 * 2, r2 * 2);
+        }
+    }
+
+    Brush LinGrad(float x, float y, float w, float h, Color a, Color b)
+    {
+        return new LinearGradientBrush(new RectangleF(x, y, Math.Max(1f, w), Math.Max(1f, h)), a, b, LinearGradientMode.Vertical);
+    }
+
+    void SoftShadow(float cx, float cy, float rx, float ry, int a)
+    {
+        using (GraphicsPath gp = new GraphicsPath())
+        {
+            gp.AddEllipse(cx - rx, cy - ry, rx * 2f, ry * 2f);
+            using (PathGradientBrush pg = new PathGradientBrush(gp))
+            {
+                pg.CenterColor = Color.FromArgb(a, 0, 0, 0);
+                pg.SurroundColors = new Color[] { Color.FromArgb(0, 0, 0, 0) };
+                g.FillPath(pg, gp);
+            }
+        }
+    }
+
+    static GraphicsPath RoundRectPath(float x, float y, float w, float h, float r)
+    {
+        GraphicsPath gp = new GraphicsPath();
+        gp.AddArc(x, y, r * 2, r * 2, 180, 90);
+        gp.AddArc(x + w - r * 2, y, r * 2, r * 2, 270, 90);
+        gp.AddArc(x + w - r * 2, y + h - r * 2, r * 2, r * 2, 0, 90);
+        gp.AddArc(x, y + h - r * 2, r * 2, r * 2, 90, 90);
+        gp.CloseFigure();
+        return gp;
     }
 
     void FillR(Brush b, float x, float y, float w, float h) { g.FillRectangle(b, x, y, w, h); }
@@ -1356,63 +1389,80 @@ public class Pejcz : Form
         float spd = (float)Math.Sqrt(petVX * petVX + petVY * petVY);
         bool moving = spd > 25f;
         bool cs = couch >= 2;
+        bool lying = couch == 3;
         bool wk = work > 0;
         float sit = wk ? 1.2f * u * Math.Min(1f, workT * 4f) : 0f;
-        float bob = cs ? CouchBob(u) : wk ? -sit + (work == 2 ? (float)Math.Abs(Math.Sin(T * 40.0)) * u * 0.35f : (float)Math.Sin(T * 12.0) * u * 0.1f)
+        float bob = lying ? 0f : cs ? CouchBob(u) : wk ? -sit + (work == 2 ? (float)Math.Abs(Math.Sin(T * 40.0)) * u * 0.35f : (float)Math.Sin(T * 12.0) * u * 0.1f)
             : (moving ? Math.Abs((float)Math.Sin(petPhase)) * u * 0.5f : (float)Math.Sin(T * 2.5f) * u * 0.12f);
         float sx = 1f + sq * 0.35f, sy = 1f - sq * 0.35f;
         float tilt = Clamp(petVX * 0.0007f, -0.25f, 0.25f) + (dizzy > 0f ? (float)Math.Sin(T * 22f) * 0.14f : 0f);
-        if (wk) tilt = 0f;
-        if (cs) tilt = couch == 3 ? (float)Math.Sin(T * 1.2) * 0.09f - 0.05f : 0f;
+        if (wk || cs) tilt = 0f;
         float jx = (wk && work == 2) ? ((float)rnd.NextDouble() - 0.5f) * u * 0.3f : 0f;
 
-        using (SolidBrush sh = new SolidBrush(Color.FromArgb(70, 0, 0, 0))) g.FillEllipse(sh, petX - 6f * u, petY - 1.2f * u, 12f * u, 2.4f * u);
+        if (!lying) SoftShadow(petX, petY, 7f * u, 1.5f * u, 95);
 
         GraphicsState st = g.Save();
-        g.TranslateTransform(petX + jx, petY);
-        g.RotateTransform(tilt * 57.3f);
-        g.ScaleTransform(sx, sy);
+        if (lying)
+        {
+            float lay = Math.Min(1f, couchT / 0.9f); lay = lay * lay * (3f - 2f * lay);
+            g.TranslateTransform(petX + 0.6f * u * lay, petY + 0.9f * u * (1f - lay) - 1.76f * u * lay);
+            g.RotateTransform(-3f * lay);
+            g.ScaleTransform(1f, 1f - 0.28f * lay);
+        }
+        else
+        {
+            g.TranslateTransform(petX + jx, petY);
+            g.RotateTransform(tilt * 57.3f);
+            g.ScaleTransform(sx, sy);
+        }
 
         float legH = 2f * u;
+        // oryginalny Clawd: plaski pomaranczowy blok, czarne oczy, 4 cienkie nogi, male raczki po bokach
         using (SolidBrush body = new SolidBrush(Color.FromArgb(255, 217, 119, 87)))
-        using (SolidBrush dark = new SolidBrush(Color.FromArgb(255, 176, 86, 58)))
-        using (SolidBrush black = new SolidBrush(Color.FromArgb(255, 25, 20, 18)))
+        using (SolidBrush black = new SolidBrush(Color.FromArgb(255, 24, 19, 17)))
+        using (SolidBrush shade = new SolidBrush(Color.FromArgb(34, 120, 40, 20)))
+        using (SolidBrush light = new SolidBrush(Color.FromArgb(26, 255, 255, 255)))
         {
-            float[] lx = { -4.8f, -2.4f, 1.0f, 3.4f };
+            float[] lx = { -4.4f, -2.6f, 1.4f, 3.2f };
             for (int k = 0; k < 4; k++)
             {
                 float lift = 0f;
                 if (moving) lift = Math.Max(0f, (float)Math.Sin(petPhase * 2f + (k % 2) * Math.PI)) * u * 1.1f;
-                FillR(dark, lx[k] * u, -legH + lift, 1.4f * u, legH - lift);
+                FillR(body, lx[k] * u, -legH + lift, 1.3f * u, legH - lift);
             }
             float armUp = panic > 0f ? u * 2.2f * (0.5f + 0.5f * (float)Math.Sin(T * 18f)) : 0f;
-            if (!wk && !cs) { FillR(body, -8f * u, -legH - 4.6f * u - bob - armUp, 2f * u, 2f * u); FillR(body, 6f * u, -legH - 4.6f * u - bob - armUp, 2f * u, 2f * u); }
+            if (!wk && !cs)
+            {
+                FillR(body, -7.9f * u, -legH - 3.8f * u - bob - armUp, 1.9f * u, 2.2f * u);
+                FillR(body, 6.0f * u, -legH - 3.8f * u - bob - armUp, 1.9f * u, 2.2f * u);
+            }
             FillR(body, -6f * u, -legH - 7f * u - bob, 12f * u, 7f * u);
-            FillR(dark, -6f * u, -legH - 1.2f * u - bob, 12f * u, 1.2f * u);
+            FillR(light, -6f * u, -legH - 7f * u - bob, 12f * u, 2.2f * u);
+            FillR(shade, -6f * u, -legH - 1.4f * u - bob, 12f * u, 1.4f * u);
 
             float ey = -legH - 5.7f * u - bob + (wk ? 0.5f * u : 0f);
             float exo = (cs && couch == 2) ? -0.6f * u : 0f;
             if (dizzy > 0f)
             {
-                using (Pen p = new Pen(Color.FromArgb(255, 25, 20, 18), 0.5f * u))
+                using (Pen p = new Pen(Color.FromArgb(255, 24, 19, 17), 0.5f * u))
                 {
-                    float[] ex = { -3.4f, 2.1f };
+                    float[] ex = { -3.8f, 2.4f };
                     for (int k = 0; k < 2; k++)
                     {
-                        float x0 = ex[k] * u, y0 = ey, w = 1.4f * u, h = 2.1f * u;
+                        float x0 = ex[k] * u, y0 = ey, w = 1.4f * u, h = 2.2f * u;
                         g.DrawLine(p, x0, y0, x0 + w, y0 + h); g.DrawLine(p, x0 + w, y0, x0, y0 + h);
                     }
                 }
             }
             else if ((blinkT < 0f && work != 2) || (cs && couch == 3))
             {
-                FillR(black, -3.4f * u, ey + 0.85f * u, 1.3f * u, 0.4f * u);
-                FillR(black, 2.1f * u, ey + 0.85f * u, 1.3f * u, 0.4f * u);
+                FillR(black, -3.8f * u, ey + 0.9f * u, 1.4f * u, 0.4f * u);
+                FillR(black, 2.4f * u, ey + 0.9f * u, 1.4f * u, 0.4f * u);
             }
             else
             {
-                FillR(black, -3.4f * u + exo, ey, 1.3f * u, 2.1f * u);
-                FillR(black, 2.1f * u + exo, ey, 1.3f * u, 2.1f * u);
+                FillR(black, -3.8f * u + exo, ey, 1.4f * u, 2.2f * u);
+                FillR(black, 2.4f * u + exo, ey, 1.4f * u, 2.2f * u);
             }
         }
         g.Restore(st);
@@ -1435,7 +1485,7 @@ public class Pejcz : Form
 
     float CouchBob(float u)
     {
-        if (couch == 3) return -0.9f * u + (float)Math.Sin(T * 1.6) * u * 0.15f;
+        if (couch == 3) return 0f;
         return -0.9f * u * Math.Min(1f, couchT * 3f);
     }
 
@@ -1463,9 +1513,12 @@ public class Pejcz : Form
             FillR(fr, -19f * u, -2.5f * u, 4f * u, 1.4f * u);
             FillR(fr, -21f * u, -1.2f * u, 8f * u, 0.9f * u);
         }
+        using (Pen bz = new Pen(Color.FromArgb(70, 255, 255, 255), 1f)) g.DrawRectangle(bz, -23f * u, -9.5f * u, 12f * u, 7f * u);
+        using (SolidBrush led = new SolidBrush(on ? Color.FromArgb(255, 80, 220, 120) : Color.FromArgb(255, 200, 60, 50))) g.FillEllipse(led, -12.4f * u, -3.4f * u, 0.5f * u, 0.5f * u);
         if (!on)
         {
             using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 20, 24, 30))) FillR(b, sx0, sy0, sw, sh);
+            using (SolidBrush rf = new SolidBrush(Color.FromArgb(22, 255, 255, 255))) g.FillPolygon(rf, new PointF[] { new PointF(sx0, sy0), new PointF(sx0 + sw * 0.5f, sy0), new PointF(sx0, sy0 + sh * 0.6f) });
             return;
         }
         using (SolidBrush b = new SolidBrush(pal[ph])) FillR(b, sx0, sy0, sw, sh);
@@ -1484,6 +1537,7 @@ public class Pejcz : Form
         {
             for (float yy = sy0; yy < sy0 + sh; yy += 3f) g.DrawLine(p, sx0, yy, sx0 + sw, yy);
         }
+        using (SolidBrush rf = new SolidBrush(Color.FromArgb(34, 255, 255, 255))) g.FillPolygon(rf, new PointF[] { new PointF(sx0, sy0), new PointF(sx0 + sw * 0.55f, sy0), new PointF(sx0, sy0 + sh * 0.65f) });
         if (couch == 2 && couchT < 0.4f)
         {
             using (SolidBrush b = new SolidBrush(Color.FromArgb(A(1f - couchT / 0.4f), 255, 255, 255))) FillR(b, sx0, sy0, sw, sh);
@@ -1498,25 +1552,58 @@ public class Pejcz : Form
         GraphicsState st = g.Save();
         g.TranslateTransform(couchX, couchY);
         g.ScaleTransform(sc, sc);
+        SoftShadow(0f, 1.2f * u, 15f * u, 2.2f * u, 110);
         DrawTv(u, couch >= 2);
-        using (SolidBrush back = new SolidBrush(Color.FromArgb(255, 109, 47, 53)))
-        using (SolidBrush roll = new SolidBrush(Color.FromArgb(255, 138, 61, 69)))
-        using (SolidBrush leg = new SolidBrush(Color.FromArgb(255, 50, 32, 24)))
-        using (SolidBrush cush = new SolidBrush(Color.FromArgb(255, 154, 70, 80)))
-        using (SolidBrush arm = new SolidBrush(Color.FromArgb(255, 125, 54, 64)))
+        bool seatBack = couch == 1 || couch == 3;
+        using (Brush back = LinGrad(-10.5f * u, -11f * u, 21f * u, 8.5f * u, Color.FromArgb(255, 126, 52, 60), Color.FromArgb(255, 92, 36, 44)))
+        using (Brush roll = LinGrad(-10.5f * u, -11.8f * u, 21f * u, 2.4f * u, Color.FromArgb(255, 164, 78, 88), Color.FromArgb(255, 122, 52, 62)))
+        using (SolidBrush leg = new SolidBrush(Color.FromArgb(255, 48, 30, 22)))
+        using (SolidBrush btn = new SolidBrush(Color.FromArgb(120, 50, 16, 22)))
+        using (Pen pip = new Pen(Color.FromArgb(70, 255, 200, 190), 1f))
         {
-            FillR(back, -10.5f * u, -11f * u, 21f * u, 8.5f * u);
-            FillR(roll, -10.5f * u, -11.5f * u, 21f * u, 2f * u);
-            FillR(leg, -11.5f * u, 0.2f * u, 1f * u, 0.9f * u);
-            FillR(leg, 10.5f * u, 0.2f * u, 1f * u, 0.9f * u);
-            if (couch == 1)
+            FillR(leg, -11.5f * u, 0.2f * u, 1.1f * u, 1.0f * u);
+            FillR(leg, 10.4f * u, 0.2f * u, 1.1f * u, 1.0f * u);
+            g.FillRectangle(back, -10.5f * u, -11f * u, 21f * u, 8.5f * u);
+            for (int r = 0; r < 2; r++)
+                for (int c = 0; c < 6; c++)
+                    g.FillEllipse(btn, (-8.2f + c * 3.3f + (r % 2) * 1.6f) * u, (-9.6f + r * 3.2f) * u, 0.7f * u, 0.7f * u);
+            g.FillRectangle(roll, -10.5f * u, -11.8f * u, 21f * u, 2.4f * u);
+            g.DrawLine(pip, -10.3f * u, -11.5f * u, 10.3f * u, -11.5f * u);
+            if (seatBack)
             {
-                FillR(cush, -10f * u, -3.4f * u, 20f * u, 3.6f * u);
-                FillR(arm, -12.5f * u, -6.5f * u, 2.6f * u, 7.2f * u);
-                FillR(arm, 9.9f * u, -6.5f * u, 2.6f * u, 7.2f * u);
+                DrawCouchSeat(u);
+            }
+            if (couch == 3)
+            {
+                // poduszka pod glowa
+                using (GraphicsPath pp = RoundRectPath(-9.9f * u, -9.6f * u, 7.8f * u, 6.0f * u, 1.8f * u))
+                using (Brush pb = LinGrad(-9.9f * u, -9.6f * u, 7.8f * u, 6.0f * u, Color.FromArgb(255, 252, 246, 232), Color.FromArgb(255, 214, 204, 184)))
+                using (Pen po = new Pen(Color.FromArgb(120, 110, 90, 70), 1f))
+                {
+                    g.FillPath(pb, pp); g.DrawPath(po, pp);
+                    g.DrawLine(po, -9.4f * u, -6.6f * u, -2.6f * u, -6.6f * u);
+                }
             }
         }
         g.Restore(st);
+    }
+
+    void DrawCouchSeat(float u)
+    {
+        using (Brush cush = LinGrad(-10f * u, -3.4f * u, 20f * u, 3.6f * u, Color.FromArgb(255, 176, 86, 98), Color.FromArgb(255, 132, 56, 68)))
+        using (Brush armL = LinGrad(-12.5f * u, -6.5f * u, 2.6f * u, 7.2f * u, Color.FromArgb(255, 150, 66, 78), Color.FromArgb(255, 108, 44, 54)))
+        using (Brush armR = LinGrad(9.9f * u, -6.5f * u, 2.6f * u, 7.2f * u, Color.FromArgb(255, 150, 66, 78), Color.FromArgb(255, 108, 44, 54)))
+        using (Pen seam = new Pen(Color.FromArgb(120, 60, 20, 26), 0.25f * u))
+        using (Pen top = new Pen(Color.FromArgb(90, 255, 214, 206), 0.3f * u))
+        {
+            g.FillRectangle(cush, -10f * u, -3.4f * u, 20f * u, 3.6f * u);
+            g.DrawLine(top, -9.8f * u, -3.3f * u, 9.8f * u, -3.3f * u);
+            g.DrawLine(seam, 0f, -3.4f * u, 0f, 0.2f * u);
+            g.FillRectangle(armL, -12.5f * u, -6.5f * u, 2.6f * u, 7.2f * u);
+            g.FillRectangle(armR, 9.9f * u, -6.5f * u, 2.6f * u, 7.2f * u);
+            g.DrawLine(top, -12.3f * u, -6.4f * u, -10.1f * u, -6.4f * u);
+            g.DrawLine(top, 10.1f * u, -6.4f * u, 12.3f * u, -6.4f * u);
+        }
     }
 
     void DrawCouchFront()
@@ -1524,48 +1611,85 @@ public class Pejcz : Form
         float u = U;
         GraphicsState st = g.Save();
         g.TranslateTransform(couchX, couchY);
-        using (SolidBrush cush = new SolidBrush(Color.FromArgb(255, 154, 70, 80)))
-        using (SolidBrush arm = new SolidBrush(Color.FromArgb(255, 125, 54, 64)))
+        if (couch == 3) { DrawBlanket(u); g.Restore(st); return; }
+        DrawCouchSeat(u);
         using (SolidBrush skin = new SolidBrush(Color.FromArgb(255, 217, 119, 87)))
-        using (SolidBrush paper = new SolidBrush(Color.FromArgb(255, 239, 233, 214)))
+        using (Brush paper = LinGrad(-4.2f * u, -4.4f * u, 8.4f * u, 4.2f * u, Color.FromArgb(255, 246, 241, 224), Color.FromArgb(255, 222, 214, 192)))
         using (SolidBrush ink = new SolidBrush(Color.FromArgb(255, 45, 40, 34)))
-        using (Pen seam = new Pen(Color.FromArgb(120, 60, 20, 26), 0.25f * u))
+        using (SolidBrush inkL = new SolidBrush(Color.FromArgb(150, 80, 72, 62)))
+        using (SolidBrush psh = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
         {
-            FillR(cush, -10f * u, -3.4f * u, 20f * u, 3.6f * u);
-            g.DrawLine(seam, 0f, -3.4f * u, 0f, 0.2f * u);
-            FillR(arm, -12.5f * u, -6.5f * u, 2.6f * u, 7.2f * u);
-            FillR(arm, 9.9f * u, -6.5f * u, 2.6f * u, 7.2f * u);
-            if (couch == 2)
+            float pf = T % 9f;
+            float fx = pf < 0.4f ? Math.Max(0.03f, Math.Abs((float)Math.Cos(Math.PI * pf / 0.4f))) : 1f;
+            GraphicsState s2 = g.Save();
+            g.TranslateTransform(0f, -2.3f * u);
+            g.ScaleTransform(fx, 1f);
+            FillR(psh, -4.0f * u, -1.8f * u, 8.4f * u, 4.2f * u);
+            g.FillRectangle(paper, -4.2f * u, -2.1f * u, 8.4f * u, 4.2f * u);
+            FillR(ink, -3.8f * u, -1.8f * u, 7.6f * u, 0.8f * u);
+            FillR(inkL, -3.8f * u, -0.6f * u, 3.4f * u, 1.7f * u);
+            for (int i = 0; i < 4; i++)
             {
-                float pf = T % 9f;
-                float fx = pf < 0.4f ? Math.Max(0.03f, Math.Abs((float)Math.Cos(Math.PI * pf / 0.4f))) : 1f;
-                GraphicsState s2 = g.Save();
-                g.TranslateTransform(0f, -2.3f * u);
-                g.ScaleTransform(fx, 1f);
-                FillR(paper, -4.2f * u, -2.1f * u, 8.4f * u, 4.2f * u);
-                FillR(ink, -3.8f * u, -1.8f * u, 7.6f * u, 0.8f * u);
-                for (int i = 0; i < 4; i++)
-                {
-                    FillR(ink, -3.8f * u, (-0.5f + i * 0.65f) * u, (i % 2 == 0 ? 3.4f : 3.0f) * u, 0.22f * u);
-                    FillR(ink, 0.3f * u, (-0.5f + i * 0.65f) * u, 3.4f * u, 0.22f * u);
-                }
-                g.Restore(s2);
-                FillR(skin, -5.8f * u, -3.4f * u, 1.6f * u, 1.6f * u);
-                FillR(skin, 4.2f * u, -3.4f * u, 1.6f * u, 1.6f * u);
+                FillR(inkL, 0.3f * u, (-0.6f + i * 0.45f) * u, 3.4f * u, 0.18f * u);
+                FillR(inkL, -3.8f * u, (1.2f + i * 0.2f) * u, (i % 2 == 0 ? 7.6f : 6.2f) * u, 0.14f * u);
             }
-            else
+            g.Restore(s2);
+            FillR(skin, -5.8f * u, -3.4f * u, 1.6f * u, 1.6f * u);
+            FillR(skin, 4.2f * u, -3.4f * u, 1.6f * u, 1.6f * u);
+        }
+        g.Restore(st);
+    }
+
+    // kocyk: pledowy, otula ludzika do poziomu oczu i faluje przy oddechu
+    void DrawBlanket(float u)
+    {
+        float appear = Math.Min(1f, Math.Max(0f, (couchT - 0.7f) / 0.6f));
+        if (appear <= 0f) return;
+        appear = appear * appear * (3f - 2f * appear);
+        float breath = 1f + 0.03f * (float)Math.Sin(T * 1.5);
+        float x0 = -7.6f * u, x1 = 7.8f * u, y0 = -5.2f * u, y1 = 1.3f * u;
+        float h = y1 - y0, w = x1 - x0;
+        GraphicsState st = g.Save();
+        g.TranslateTransform(0f, y1 + (1f - appear) * -8f * u);
+        g.ScaleTransform(1f, breath);
+        g.TranslateTransform(0f, -y1);
+        List<PointF> pl = new List<PointF>();
+        for (int k = 0; k <= 6; k++) pl.Add(new PointF(x0 + w * k / 6f, y0 + 0.45f * u * (float)Math.Sin(k * 1.25 + 0.4) - (k == 3 ? 0.4f * u : 0f)));
+        pl.Add(new PointF(x1 + 0.25f * u, y0 + h * 0.5f));
+        for (int k = 6; k >= 0; k--) pl.Add(new PointF(x0 + w * k / 6f, y1 + 0.22f * u * (float)Math.Sin(k * 1.9 + 1.0)));
+        pl.Add(new PointF(x0 - 0.25f * u, y0 + h * 0.5f));
+        PointF[] pts = pl.ToArray();
+        int al = A(appear);
+        using (GraphicsPath gp = new GraphicsPath())
+        {
+            gp.AddClosedCurve(pts, 0.25f);
+            GraphicsState s2 = g.Save();
+            g.TranslateTransform(0.3f * u, 0.5f * u);
+            using (SolidBrush sh = new SolidBrush(Color.FromArgb((int)(al * 0.22f), 0, 0, 0))) g.FillPath(sh, gp);
+            g.Restore(s2);
+            using (SolidBrush baseB = new SolidBrush(Color.FromArgb(al, 52, 112, 120))) g.FillPath(baseB, gp);
+            g.SetClip(gp, CombineMode.Replace);
+            using (SolidBrush band = new SolidBrush(Color.FromArgb((int)(al * 0.55f), 236, 222, 178)))
+            using (SolidBrush band2 = new SolidBrush(Color.FromArgb((int)(al * 0.35f), 24, 62, 72)))
             {
-                float drop = (1f - Math.Min(1f, couchT / 0.6f)) * -2.2f * u;
-                GraphicsState s2 = g.Save();
-                g.TranslateTransform(0f, -1.4f * u + drop);
-                g.RotateTransform(10f);
-                FillR(paper, -3.5f * u, -1.1f * u, 7f * u, 2.2f * u);
-                FillR(ink, -3.1f * u, -0.8f * u, 6.2f * u, 0.5f * u);
-                FillR(ink, -3.1f * u, 0.1f * u, 4.0f * u, 0.2f * u);
-                g.Restore(s2);
-                FillR(skin, -7.6f * u, -2.2f * u, 1.6f * u, 1.6f * u);
-                FillR(skin, 6.0f * u, -2.2f * u, 1.6f * u, 1.6f * u);
+                for (float xx = x0; xx < x1; xx += 1.9f * u) { g.FillRectangle(band, xx, y0 - u, 0.35f * u, h + 2f * u); g.FillRectangle(band2, xx + 0.8f * u, y0 - u, 0.9f * u, h + 2f * u); }
+                for (float yy = y0 - 0.6f * u; yy < y1; yy += 1.9f * u) { g.FillRectangle(band, x0 - u, yy, w + 2f * u, 0.35f * u); g.FillRectangle(band2, x0 - u, yy + 0.8f * u, w + 2f * u, 0.9f * u); }
             }
+            using (Brush fold = new LinearGradientBrush(new RectangleF(x0, y0, w, h), Color.FromArgb((int)(al * 0.32f), 0, 0, 0), Color.FromArgb(0, 0, 0, 0), LinearGradientMode.ForwardDiagonal))
+                g.FillPath(fold, gp);
+            using (Pen foldP = new Pen(Color.FromArgb((int)(al * 0.30f), 0, 20, 30), 0.35f * u))
+            {
+                g.DrawCurve(foldP, new PointF[] { new PointF(x0 + 1.0f * u, y0 + 2.6f * u), new PointF(x0 + w * 0.35f, y0 + 3.4f * u), new PointF(x0 + w * 0.7f, y0 + 2.5f * u), new PointF(x1 - 0.6f * u, y0 + 3.0f * u) });
+                g.DrawCurve(foldP, new PointF[] { new PointF(x0 + 2.0f * u, y0 + 4.6f * u), new PointF(x0 + w * 0.5f, y0 + 5.2f * u), new PointF(x1 - 1.4f * u, y0 + 4.5f * u) });
+            }
+            g.ResetClip();
+            using (Pen edge = new Pen(Color.FromArgb(al, 20, 52, 60), 0.3f * u)) g.DrawPath(edge, gp);
+            using (Pen hl = new Pen(Color.FromArgb((int)(al * 0.5f), 255, 244, 220), 0.35f * u))
+                g.DrawCurve(hl, new PointF[] { new PointF(x0 + w * 0.08f, y0 + 0.3f * u), new PointF(x0 + w * 0.3f, y0 + 0.1f * u), new PointF(x0 + w * 0.5f, y0 - 0.3f * u), new PointF(x0 + w * 0.78f, y0 + 0.2f * u) });
+        }
+        using (Pen fr = new Pen(Color.FromArgb(al, 236, 222, 178), 0.3f * u))
+        {
+            for (float xx = x0 + 0.5f * u; xx < x1; xx += 0.7f * u) g.DrawLine(fr, xx, y1 + 0.15f * u, xx + 0.1f * u, y1 + 0.75f * u);
         }
         g.Restore(st);
     }
@@ -1579,25 +1703,32 @@ public class Pejcz : Form
         GraphicsState st = g.Save();
         g.TranslateTransform(petX, petY);
         g.ScaleTransform(sc, sc);
-        using (SolidBrush wood = new SolidBrush(Color.FromArgb(255, 130, 88, 52)))
-        using (SolidBrush woodD = new SolidBrush(Color.FromArgb(255, 88, 56, 32)))
-        using (SolidBrush lapBack = new SolidBrush(fr ? Color.FromArgb(255, 170, 70, 50) : Color.FromArgb(255, 72, 76, 86)))
-        using (SolidBrush lapBase = new SolidBrush(Color.FromArgb(255, 48, 52, 58)))
+        SoftShadow(0f, 2.4f * u, 12f * u, 1.8f * u, 110);
+        using (Brush deskTop = LinGrad(-10f * u, -1.1f * u, 20f * u, 1.3f * u, Color.FromArgb(255, 170, 118, 72), Color.FromArgb(255, 116, 72, 40)))
+        using (Brush deskFront = LinGrad(-9f * u, 0.2f * u, 18f * u, 2.2f * u, Color.FromArgb(255, 108, 68, 38), Color.FromArgb(255, 70, 42, 22)))
+        using (Brush lapBack = LinGrad(-4.6f * u, -5.4f * u, 9.2f * u, 4.3f * u, fr ? Color.FromArgb(255, 200, 90, 62) : Color.FromArgb(255, 104, 110, 122), fr ? Color.FromArgb(255, 140, 56, 40) : Color.FromArgb(255, 58, 62, 72)))
+        using (Brush lapBase = LinGrad(-5.4f * u, -1.3f * u, 10.8f * u, 0.4f * u, Color.FromArgb(255, 84, 88, 96), Color.FromArgb(255, 44, 47, 54)))
         using (SolidBrush skin = new SolidBrush(Color.FromArgb(255, 217, 119, 87)))
-        using (SolidBrush cup = new SolidBrush(Color.FromArgb(255, 245, 245, 240)))
+        using (Brush cup = LinGrad(7f * u, -2.9f * u, 1.8f * u, 1.8f * u, Color.FromArgb(255, 252, 252, 248), Color.FromArgb(255, 200, 200, 196)))
+        using (SolidBrush coffee = new SolidBrush(Color.FromArgb(255, 74, 44, 26)))
         using (Pen logo = new Pen(Color.FromArgb(255, 217, 119, 87), 0.35f * u))
-        using (Pen handle = new Pen(Color.FromArgb(255, 245, 245, 240), 0.35f * u))
+        using (Pen handle = new Pen(Color.FromArgb(255, 235, 235, 230), 0.35f * u))
+        using (Pen grain = new Pen(Color.FromArgb(46, 60, 30, 10), 1f))
+        using (Pen shine = new Pen(Color.FromArgb(70, 255, 255, 255), 0.5f * u))
         {
-            FillR(woodD, -9f * u, 0.2f * u, 18f * u, 2.2f * u);
-            FillR(wood, -10f * u, -1.1f * u, 20f * u, 1.3f * u);
-            FillR(lapBack, -4.6f * u, -5.4f * u, 9.2f * u, 4.3f * u);
-            FillR(lapBase, -5.4f * u, -1.3f * u, 10.8f * u, 0.4f * u);
+            g.FillRectangle(deskFront, -9f * u, 0.2f * u, 18f * u, 2.2f * u);
+            g.FillRectangle(deskTop, -10f * u, -1.1f * u, 20f * u, 1.3f * u);
+            for (int k = 0; k < 7; k++) g.DrawLine(grain, (-9f + k * 2.9f) * u, -0.9f * u, (-8f + k * 2.9f) * u, 0.1f * u);
+            g.FillRectangle(lapBack, -4.6f * u, -5.4f * u, 9.2f * u, 4.3f * u);
+            g.DrawLine(shine, -4.2f * u, -5.0f * u, 1.2f * u, -5.0f * u);
+            g.FillRectangle(lapBase, -5.4f * u, -1.3f * u, 10.8f * u, 0.4f * u);
             for (int i = 0; i < 3; i++)
             {
                 float a = i * 1.0472f;
                 g.DrawLine(logo, -(float)Math.Cos(a) * 0.6f * u, -3.3f * u - (float)Math.Sin(a) * 0.6f * u, (float)Math.Cos(a) * 0.6f * u, -3.3f * u + (float)Math.Sin(a) * 0.6f * u);
             }
-            FillR(cup, 7f * u, -2.9f * u, 1.8f * u, 1.8f * u);
+            g.FillRectangle(cup, 7f * u, -2.9f * u, 1.8f * u, 1.8f * u);
+            g.FillRectangle(coffee, 7.1f * u, -2.9f * u, 1.6f * u, 0.4f * u);
             g.DrawEllipse(handle, 8.5f * u, -2.5f * u, 0.9f * u, 0.9f * u);
             float offA = (float)Math.Sin(T * spd) * 0.7f * u, offB = (float)Math.Sin(T * spd + 3.14) * 0.7f * u;
             FillR(skin, -7.4f * u, -2.6f * u + offA, 2f * u, 2f * u);
@@ -1617,7 +1748,11 @@ public class Pejcz : Form
         {
             Spark s = sparks[i]; float a = s.life / s.max;
             using (SolidBrush b = new SolidBrush(Color.FromArgb(A(a), s.c)))
-            { float r = s.size * (0.4f + a); g.FillEllipse(b, s.x - r, s.y - r, r * 2f, r * 2f); }
+            {
+                float r = s.size * (0.4f + a);
+                using (SolidBrush halo = new SolidBrush(Color.FromArgb(A(a * 0.22f), s.c))) g.FillEllipse(halo, s.x - r * 2.3f, s.y - r * 2.3f, r * 4.6f, r * 4.6f);
+                g.FillEllipse(b, s.x - r, s.y - r, r * 2f, r * 2f);
+            }
         }
         for (int i = 0; i < texts.Count; i++)
         {
@@ -1635,33 +1770,38 @@ public class Pejcz : Form
     void DrawBubble()
     {
         if (bubT <= 0f || bub.Length == 0) return;
+        float fade = Math.Min(1f, bubT / 0.25f);
         SizeF sz = g.MeasureString(bub, bubFont);
-        float bw = sz.Width + 16f, bh = sz.Height + 6f;
-        float bx = Clamp(petX - bw / 2f, 4f, W - bw - 4f);
-        float by = Math.Max(4f, petY - 10.5f * U - bh - 12f);
-        float rad = bh / 2f;
-        using (GraphicsPath gp = new GraphicsPath())
+        float bw = sz.Width + 22f, bh = sz.Height + 10f;
+        float bx = Clamp(petX - bw / 2f, 6f, W - bw - 6f);
+        float by = Math.Max(6f, petY - 10.5f * U - bh - 14f);
+        float rad = Math.Min(bh / 2f, 16f);
+        float tx = Clamp(petX, bx + rad, bx + bw - rad);
+        using (GraphicsPath gp = RoundRectPath(bx, by, bw, bh, rad))
         {
-            gp.AddArc(bx, by, rad * 2, rad * 2, 180, 90);
-            gp.AddArc(bx + bw - rad * 2, by, rad * 2, rad * 2, 270, 90);
-            gp.AddArc(bx + bw - rad * 2, by + bh - rad * 2, rad * 2, rad * 2, 0, 90);
-            gp.AddArc(bx, by + bh - rad * 2, rad * 2, rad * 2, 90, 90);
-            gp.CloseFigure();
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(240, 255, 255, 255)))
-            using (Pen p = new Pen(Color.FromArgb(255, 60, 40, 30), 2f))
+            GraphicsState s2 = g.Save();
+            g.TranslateTransform(2f, 4f);
+            using (SolidBrush sb = new SolidBrush(Color.FromArgb(A(0.28f * fade), 0, 0, 0))) g.FillPath(sb, gp);
+            g.Restore(s2);
+            using (Brush fb = new LinearGradientBrush(new RectangleF(bx, by, bw, bh), Color.FromArgb(A(0.97f * fade), 255, 255, 255), Color.FromArgb(A(0.97f * fade), 232, 235, 246), LinearGradientMode.Vertical))
+            using (SolidBrush tb2 = new SolidBrush(Color.FromArgb(A(0.97f * fade), 244, 245, 250)))
+            using (Pen p = new Pen(Color.FromArgb(A(0.9f * fade), 92, 70, 58), 1.8f))
             {
-                g.FillPath(b, gp); g.DrawPath(p, gp);
-                float tx = Clamp(petX, bx + rad, bx + bw - rad);
-                PointF[] tri = { new PointF(tx - 6f, by + bh - 1f), new PointF(tx + 6f, by + bh - 1f), new PointF(petX, by + bh + 10f) };
-                g.FillPolygon(b, tri);
+                PointF[] tri = { new PointF(tx - 7f, by + bh - 1.5f), new PointF(tx + 7f, by + bh - 1.5f), new PointF(petX, by + bh + 12f) };
+                g.FillPath(fb, gp);
+                g.FillPolygon(tb2, tri);
+                g.DrawPath(p, gp);
+                g.DrawLine(p, tx - 7f, by + bh, petX, by + bh + 12f);
+                g.DrawLine(p, tx + 7f, by + bh, petX, by + bh + 12f);
+                using (Pen cover = new Pen(Color.FromArgb(A(0.97f * fade), 244, 245, 250), 2.4f)) g.DrawLine(cover, tx - 6f, by + bh, tx + 6f, by + bh);
             }
         }
-        using (SolidBrush tb = new SolidBrush(Color.FromArgb(255, 40, 28, 22)))
-            g.DrawString(bub, bubFont, tb, bx + 8f, by + 3f);
+        using (SolidBrush tb = new SolidBrush(Color.FromArgb(A(fade), 40, 28, 22)))
+            g.DrawString(bub, bubFont, tb, bx + 11f, by + 5f);
     }
 }
 '@
-$iconB64 = 'iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAMAAABrrFhUAAADAFBMVEVRNiwAAABFLCQoGhZrRDA6KCRjPC02Ixy4VTdbQjzumHbUaUWNWDRsV1AbExLieFFiSUKiSzLbc06OSC2UZDl3Ylroimb1pYJaR0PyoX5FKRp5UzareEf+9LijZTe0hUn+/v1ONjXmgl1UNBt3aWWOiIY9MjGDenfGmFEPCwr56KmNZBY1JCRmOhz95JlaSDXw1YxVVVSEPCnQplTDXDptWkl9cm9aR0euaEfFilbPk2M7OjSWZ0m8klCmdzvpyngkDQl/f3+bc0bLYT2yXUGccTyb2Pvku1qMWEO0l2fbs1ur5f7PiGr++cVuRRvWtnC1hS/UWFGopaWIgH7IqG/jWFuYlJT///9qSEhJOTaBaGJtVlFIOTdURkNrV1L26MIzKSh/AABKOzhVR0TjvWNaUk9uWFSjnZu9pHFuWFJuV1G1trbFxsbmyoQzGho0KSdIOTZHNzNpKiV8PT2EXBbF5/gyKilGHBVWR0RQQ0FrU0u6fGO4yNJPQD14YVvOnDI7MjE8MzJ6VRaqVVX/8JM8PBFJOzhQQD2SyOe02e7cwoLW19fB1uMyKik2LSxVAABWRUNkLR7/AADvXWAVFRU4MTBOQT54YFt1aWmPuM+0hme0u8HIfmHSuYX//wAlHBw1Li45MDBPQD1XSEhVVQBpTUZ2YFx/fwB/fz+YhF21RkjXpDXt36fl4+MAAP8AfwAuHyEkJBIpIhs+MClVKipALitVOFVcQBVTRztSQT5/AH9qVT93YFt3cXJ7stGRf5GanaGbr72fsr2Twt2iPz+70d/HTU/Djz/FrYDD8v/ipVrrwFsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANUnqKAAABAHRSTlP+AP7+/v7//v/+/////P7//P/////8///6//7///////8O/////vz+/////w3//w3/A////w7+Df///wj//////wL//////////////////////v////wBDU3/TivLy/9NArOz//y2/P91jv///wwsdIr/BP//if94ji3//8vM/7fG/wP/BsVv//////9yrwNM/wH/DHFOug3//////wEow465KgMleAIE//////8BAv8OJSUGRwn/K5QCDJba/w7///////////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1ZfQowAAJVlJREFUeNrtnYd/20aa94fAECAtUIWgHJqipFhyZEobOZLsJJSsYilyL7J9WieO02Mn9iZ2nGRTNm13s5vspuxtu7a3t9d7ed+79717y91brrzlyj91zxQAM8AAGICk4s+dn9iyxIgkft/5Pc8zGAxJVPh3HugugLsA7gK4C+AugMyxPr/+rTtJxvzr8+s7BiB4qsOPPfbYgxnisQe933/4QXLXeXob+QPfwv98+OH5h+FLpnjsgYcPe8fz+nzPAaz/If3nwXeu/P7/+OUPPvhgOH9UuhVPPfXUC1+5ceV3HmYQ1nsHYP11Kv7K7//y8PC+xx/vloRBHpVB/9to1OvwJya8B3rhxhUK4fCzPQEw/yh8eecGiKfS/SMr5wlURl2OMgPxwtv/DQ7z0fmuAyCP+Hs3PqDiE8YpOkxl8p+CAIIvGI84JEZGauxfjLFAppyDAkmJt5/gB9w9AOTRrrxA1GuJTxt+OFKQ6ox5IXw7RjmUO3ECMHj+l7QR6ABYB/Nf+WB4XyU+QUX19RT1ZeyAYAcHonEt0M++BwgdpAMwePIHhcKP/qA7AOaJ/H2Jgy86PskAVH2NK202m4uLi63W0rizuLS01IIfms2AS0cMAMFTP9AyAdKQ/84LSfLZ4DOBaYPvqW83F9vLS0uLi+NAoUlZNJvjBIcz3lpstsfGapTRSLkTBM//jgYClKp/743hxxNGf1An61nhxw5N9uZia6nVqjlNnvJj2B1zxmqO5wuwA4ABBHA73NAJgrdvpRJIBrC+Du5/PK3yldP1g/dHHFLtqLwmaMdYVQPhW/gBzAC/BeWA+aADBJAH6+v5AcAc88ZwnPuDkl/XkU+0NGvLoB4Gu8aGlyf7OSf4lvxarUYhOMQGHSIAE1AZ+QDMQ/bHDT807AyzHpDvjDVbS20YYKKe+btGgxR+HsQW9F/C4JwDPlhs10jZyI+gXnn+icQ0QEn6r8Rmf1lfPyl9RP5Sq9kGVZ5YciOriDwZ4DZn1hnzWMCvOjVImMUmKRMOzougXLn2gyQCKEE/2H8Qq0a/PphFPmn7TWJ9pwZVkKgDaSTb2fTPIb9AgniB3EYBUBZEOiAYoz+N5DbBte8kEEhwwFeU2V8vD2YwP+gfczGRT5WBkBpLAWbqohDkZ9omie4axjXOqr241Jx1iSfKudPga4VHswL4D4WvhOyPaWQ75SGK4D8mn/yZJXNAIr4YE8iiEOAXuS3gb9tpkjyAtOkBgRgA6wW5/GGifzC7fjj+5pITBLjdihXvQyAThprjI5glFqLV08lfCgvrWQB8i4w/jhogm3xEc7jVJHbmo4kNX6YRPsoQA58AqRG18SVqAqcDD8zrA5jn+rHv/Ozmh/rrkOEfr9FxJwePkZDuMRHw8RDwGgkmoD/nS4OpWAIqAK8XbuyrYDEyr3fQgubUFum4sYT25BtpB+szoMrxOW4E8NJYRwS+o5wRIZX/r0D9x4Md6x9rLdJDdmZdLt/QPNwAAZ4NCghJA3fWHcnbDS+rPIAU9e/3KlS/V/dxDvkIu7Ngf37kbjb5AgIDCxWU1FPKI5cFUL3+hKISRgD8aH7vU8ODHfgf8fHH403vwFFK4ichQCIBXGOPmYdAEV178tZ8OgBaAMs6g08LXXjW7+sfb3qDh7OOfgiBbwJ3Fo9xV2UbfBZFpCqESHECwPVHJUs3ocGTJwdRrP6l2mwHw8/CkEyAZ0ldZQRwFu9PeQTq9cuF7ycDWH/2sUpFMfoYR7oCOvntb59ECvtz/ax/kcZvGHmn8V7joJWUAc1OgAAoThXhz1S9vjfFATAD2jdYDunHyhAAyGvYXD/tfjin+8MmwM6slwm1RUagmMH9BAH10rVIEqBQB3iHJYBi8Ed44JEN5oIKTYHI6j0m1ZrOWSxa/DvS75sACe2ATS7SCBDrF7lwP6KdIAzghWH5XF8WTwFsnMQjzAO0CIaf2NfvuEbu7FcQCADUGAFUTNZP7hjSD0nwfBIAVgFj5PutaHub3OIVA5X+tl/+DIR6QKANzwAlMZGAER58/ij10HRIAvDo/FNR/YJ6doI+cx07Ix6CMABrts31k/Hvin4FgWbTgpqAY/zFi5466k/KZ8YoZIDBkH5PvbeSteyMnz1JTlM8BDIBMgFsuo5X/rt15ZMeuu0TwLMjsWXASDvXDllABPBo4YUKjugX1IP+5drPCIAavaQZIQAngE3cff2yB/AsjP5iTBmYSgNQhCrwqBrAtwrvVCoK/Vz58gaJWnNm9GRtmeZClIDrNBfp6YvbXf2eBzCX77i1pbbLuqw0202VTywgLRMjuQXgkH4+/EQ9vXzVPLo9CgA2lmscgUQAu+0lMmF1XNRl/f58YHaS9UMXTow4AYrAQFNFY6qoE3IjCAA8W3hQMICnnw6/p77ZHG/OjY6uHG2qCbhOCwoAngT9Rnf1ewQMSDCXxfg4fGETbXi2on4gaToYAPjDwo2gBIr6l6n8cRYrowCA/LwhEPCnwOygcNfHXywDTD4Mf6tNnis7gKn628LSSADg1wu8ByKY4gT6qfxxPz4lAMbHVQRYArCD6r7+oAxwB+DmouNbIFNAJ1Q4AGbBFWoAtDE3N84ASMO/stKCmAEALfIjR8ArIU+ANiZH1hv9XKmNOQAXOgF8j43MAJA4H0bBQuBXaAlEeO7AgTnPAGz8t1bGqfpWawv0z7RWOIFlRoBZALOsdHtRAIQqYBseAFxbcrCXBNksIOSA0AVYBjAAI5glAPP/zZmDrdZBEnMEAPywwgjUPAIEQHvRwVR/bwzgE7Bc7NdBDF0RdZQDAQDoAShIAZYAG8z926MzW1T/1gwF4BPY8C0Ac2DiSNyzBBAmefAkmOaas2xNzuIYC/w565AWTdBwDkSL4OuFKxW2voOECsjSn2b+2sFTp07dHGUAgEBLIlCGgyJLICQle6afA7AR4QxDPznpxFcB9EfkHDpYvZD7wC/5OYCEEsDP7ct+Bdzg+lvE+XPHj1+doQBOETOAB86P0ySgFnCdcTwLB9azBIC64jc7UD85OQtj6ywR6FZUvlm5Ofqrk9ICjpQDX4sAKPz1UxVvPicYgFR/yP41KnyN/jM6c/XUKeKB7U+3PQtAxYA58KTVqwQwCAAjsABMh1k0m2FtLDYOQGzMxhGAyWCkBjxGSoAAwDPACil/pPiPnp2Zm5kh/1w9fmprbW5mdGbFt4Az1oKxmMRd7wAG4toD/bQVclHOIrFApAyWiX5SyqU1PGURQMIsgJ/R+S2QJ8DBg6eO0+I3t7a2Njd3YG5ujqXCQVIFjhIATm2RDMW5yS4bwJDDN3iQ3ONKC5h/NAMAZrZwDAEyE3hWAjAPNRD7AIgHgMDR1aYHYO7s6BwM+tNPEwozZ2kqbJFWQAHASTDMyuiBGN3O/Ih6ZgEvasQCGEV2GWxRAifjkgCq4LwE4PXCjUrZA7Bx/R+3T5Igsx+od6eugnYY9ntpwHdU/03aC1kOrLbGoBrjXpwDefIlAIIFFtvwxQpvMMAjcweiZQAppkLIXw4PauDIxvbMWTbKYHQaB9bmzt7L4+xN2hRIHfQAkJXq3kyBaPEPG6Bo+xY41ybTdrkTEjqzy6wMkN6sAvC1EIBC4QWhCUBxGf/ZzKgQM2tP3+vH05AE0ApoKxxv1sbGVsfoFdBiD+bAqgSQLABl8Jxc4Njtsys0CW4uCwQCo5Sfj3QBqQuSdZDm9lwAYG7uXiEgHdaOewBWVxdbdImiR1MAJQGz4atqNs+J0oLk2CLl+sC2aAHb/60nkwHQLlhrrmx5NvAKAC8Da3M+gNXV8dYq3ftjGD2aA6iqoG1xTbO1RTEHAv3WyKnjEP9Ss4KbbDsWwHwEwFHSBVtbtOVJGUBzYPTA2ilaBVcXDy6SfZ2Y5utOARBywB13ZmFazBeMArG4tnoe4uvnsU8ACQDuDwH4L940IHBAkzXBLVCrAEDmBVsr51cX/3mRbGzFqGehLAOmTc4GyPkAJEMDJsZ8+LlYyxohHv4Sia8GAEwfQP2jEIC/UQMg82DSBdfkFPCqw8zVVmtxzN/32GMChpQDkw3QPQkM4CzEgiJgQvf3AvEdqV+lBM55/8P2ANjBVNAD8HACgONrM+EiKJTH7VWyD6zcUwDRVmib9GyIen3RmbWsho2s4PoMXcsdQfhLnAALEcDeWABlPg+srfoAoOuF26DYIrfG8STqZRiKNPD7gGU1l2et2eC3J7l+clDnWBKww2uYGQD4VbDFloHmbgYTobm1A3R2xAGcPXv2T68v70gOGHIfoL6GPtAktcAPNMKGn/7ACHxIvzf1AMhtAGbDN/lMgHvgaZgFQBe8evU4XRdprazApPn6yWW0swRIDrBoNG9iQT/dnlzzb/mQJQHTrw1AyIGVLTbMM2veydDc6NkDx9eOHz/Y+v/nz6+SV3dhq7cpoGwFZoMDWDkwer0R6K+R7dkCEVYIZxtUP++DyQCQnAPs1HeOngeT82HaAek0qNUCAP6iINppC9i0DWJy3jezwQg0JslrUMH+ARCWBOdsMwTgcAoAzwIrM2QdYOvU8auk8M3MzLH6d5Usio2fXz3q6cc7pD9AwADU5mbY2geR3LDY5eNJMRrnoAia/aaQAUVzKs0BvgW2P92mKwKn2Hrg6BqdA42u0VVRon9HAKgsADOB2UaNyof4FKYFDXrdFIa/QX7wY/IcTX9mALtI/lMAeEAAIFlglS2KHTxFhR84fvwUbQor9Dxo5wAolkYAwOTkFicwc9KepDs5RiTxNGxTAEAhmFPo/giAMopagNZBToCNPFkPXRsly4GeAZyd1s8R2FAFJxtojlvgwAauwTHjRlR/vyC/SL/CrPFwEoDAAkf5wjAgmAlWxOEk8eB50L+DBkAKADaoM0cO+ARG1MPfLw+/TQyhAcAjsMqujLLLonMtdk2kNfPpatMzwIhir9ROALAJgIY5PsoB3ITht2Xxgv1NQT4BoEgBA6mSAAhQBBTAFpv5kKtlkv7eG0CcD/sAWGxxAjPbdiS84ff185/SHCASqDEC0A8h86l4kv6rVP9OVQAFgEAjWpvjUTNT9Pt2UAIwwgS8LSLEBKtka8jWeSYffvT17xiAUB8QVNaOezEpERDdb4o/6wIINgkdZQBWVrl6Jn9n9ctzAUEmHln9k6/T+JPztqkafsrANLMBQPz6iLdLEADMgROoek/+zuqXVkYEPeWREbr4BfPy8x8KIvslB5iZAQQmcDiA7dpRrl0c/p3TLwIQBxejBjvjgZg0tUIPABL2ijonR2c2aoL6L0K/sDwaEtTwAHzJDg9/JwDo9gqGYOTk2Z85gXjH3y+OdjJiAZiTHoAPdfRrAwgQ4JNnN/wd8/5ecWyhLwaAHZF0ziNwrmspYIjFEJ/8U/FFE/gLGH6xBkQBmEEZ6O8KALoUGyCwrl+3RkKvGtrh4RctoAAglIH+LgDwWHuJgE4uW6HtBl9IKLpAuAx8aHfBAcKsi9+yjNEXOvYhACqRrAz8V7MLKWCEA90p4aWAcpShDHy10a9XBBPPBiXpBr5+HRt3GAA1gQbYv78LE6HQ6G8f+Pb2neOCRAs0TFN3JpjgACMGwB3BwPA2DJp1FNXV3w0AkfwfuX595M6pBH4jvHTJzB8JAIxoFLs2/pYl/OkIgF3/yU/2dQIgUgMGGQBDGagLAKjsUJAb8xEw93/3f/0d6qYDGAAjITrQjqLaBQh5zggbf3vsJ/+w37SlNY/oWlBWAD3RbyWo9yBkz4GfHvvud//e8FZ6Iouh+QD0Rr9WZCWA3gMA79VNWx15AKBEAD0b/BwQ6AG9dPrYsU8qZjEfgSiAvckO6OHY52AAx9PYDwD+b9mW1kc7AZDigJ2Rr4mAHejF06cv2cKrKGQSORwQD8BfG9kB/XoEDMvF+MWLkR0DGQAczuKALsnHwh+2wwnnQmDg9sTu3RPVtlWUEegnQTYHZCdgxQCQ1pPYHrfsDAxc3c1iEdvxBLpYA7oiPiGyITBQdfcE1T+xu4pkD2hbYCcBkKFO1M/coI3AaHP9hEDbyJcEagDd0J9t7CUbYC0CBvbkk6giW33NPDOAvYOoF/pxptAyQWAA4gEsAyj2wAH59eOM+j0IiRXQIfonJuAP/SsAMDoCEOeALFOAjkbflw73O7HcbL77bnu5oniSKpHtR9WyjfgykHUe0KEDOpBvMeEjJ9rNM0u77vFiz5nwHmzjhKR/os+wjTwWyFADeiufromQIZeVB7EkI7CqovyBCceO7iHVIZAhBXqknyjHVPm7Z5b23BMTe+D/LJ0QK6AnncaE2AQy1cGuA9CXLyrfFa+ciGdxz65gJz6ucuk0qgOuXbwzAGiMv+Urb/5aonKieY8Qu/YEBNq+/moV9MsVIMtcQBtADgMkKD9zZtc9GmMuiKexZxdvBy7orpK/PLAdXcHWs4AuAFlmOVMCWLy0pylX6A60cwJnWCXsE8QDibahBlDsGgBZZuPSRSNNP5vNaSq/J014QKBJnseR9FelOUBvAIQQvPdP+41E/XwvwQhRvpSkPEa6Wj2JJbCA1SfJH3Dshrdek7kO5kkBY/8bx96oxOnnytuJyvfoj3k4oA468vj38Raoej1JqgU0zwXkSdjF08dOv6QGAA0KBj2j23dpaqdxJmyAKpsDxe4kzwpA5YCQ0vdOHzv2xrChuu6Dm7uylPYsyr3AYQPQCqi6ntvFFJB3TX5+7Nix09E6CPqXd2kpT5HN+3/M/z2x2SdZANvCAWa2QB4HDH5CALwX1Y/fTW1qqeNLfuVMc7mCTzRjfqMKAHwCfdVNo2HE7enRKINaAMJSP4cUOP15ZHcY/tWOpLNoYsPu75+G6MdxANp9QpAWiPQAmN0C8FMC4GWF/hjhGRL9BNHez2L6hAaAUiPco3oPwHj8DQDwYhjAu/fkG3PR/8vT/dPFKZMjMM8ofmf3wOZmvAEiL6foRgpEG96Lb5z+fDB02/Ku/ML9KE4XL95772cVTkBVBiYmNkuBBdxGgn6dPpAPALrvs8fDr6o4s2dXJ9LZ6Jr9L9MXptcpgellxa9MTLQDAG3F25UkEOgeABSpgMvJXU2z45vX2CvzL07HFAGyDtYu+TkALRBlAKBAoAFA7zz43ZiTF97UEG7rALD3MQAvsSqIVfon+kpeGSwpDy9TDuTqAooYjFHURrZJm9r0NNIAgKYkB0h32b0b9NPlr5JnAaw8tkx9IG8KaGYAnha6Gk4HUJl+kQKYYneyd3PpPPgaUIlbwIk5tiwWyAnACm+SVxp8zwnQUb9WTOpqoVO96f77Prv35XpwD+Hq1+4BH0Bp80Jf3wXLQDoAkizQnwvAieoEzEJPiBdumjFdbQqq+p8NJ3S1UMaAUfrtfs80cI+IfIgSiUN9rpEdgJ0dQHT0vYvyVVeogeqi3v9ZSleTS9yuX+uXAu7hXfoT1oAHSkMA4EIp/lpVPIE8DlBckmJXpHfvbuNkB5iVlK4mVDgSZCIgAXB2kct/A6EouQSAayBNABkdUI9JAf7vpnhNtnoiqQbssh9K7mow5kS1EIYMwIqIJ7FJAJSSLlZ2FYD3oPvlBOAuqFITGJuJXe1SuKvJqoPYZU0H6uG8wFDpH+gjACwD6QIodgTAe8jKG/c1yK4E+Ygndk+0STF0krranxX9rrZ7V4x09mgT2AdgX5uCL1U1gKEST4CYDcbafUDfAY37Tr9RMWQA3pVpl9wc19Ve/uzilLqrSY/Er/E5PoBLL18sTpt9UflVCoAZIH77iObpgL4D0HunT//U25ciXpclh7SJrIndcV2tf1rZ1WTlfnp7v2q+9PLLaLp/c6AqaacXwqrukOvrtzpqA+kA/A05nxw79sa+hn9ZWjgqiLZbjRJI6Gqhvia42//da5f2wT8OBVBllwD9KLm0AiZtodK0gBpAMWoBo0JWgS42kBFclhSOqK9NuOwOl7gz0a42EaPce0j/HtPUPG7oGhC7EsISIGH/kOyAjDPBEAD+iMOn2UKoYVWjx9RHAQxAdoRqnFZXkwA05HuoAPQNlBopAFRpEN5GG3suIAPwHm3wk2OfUAAGjhLo69tk1+sn8nQ1KcmFe5DYVNEeKNnhC3HBpWj64dAVMYaHh/fxeAhiP4ufu4/E/n2aKYDQS6fZtQC4oR05pL7NPm9wJ4Q0F7pacR+K62peeWPX+aYly4hpVvWWQQZKhgzAkvWr1Ye1k7h06eJDBa0UgCLw+Wl6NYi8dsztC+lvb7ZVsoSudvHll9RdzatxXqBp3zH9XH9fJAzEREf3IgxmI3Dfiy/+Cv/EsTQHGIMv/Zz3cjKbXp8MhgQAbCqliV3tpSmpq1XDyrkF+ixSB03oN25pQKGdBtIGMNwxAPHVGX51KTastnhw7VKpmtbVrvldjfQ0VXVnRh/oK5WIz8nd44K+AicWQFdTIK6+2pAHQWzGAFB0tTjl3OzVFOl8LYynvWI7jioHxCK4P1wEb2kWwQgD2yqJAPrydjUy6tW+bOHKADL1Qa8Rspca6s4DVI9eNPCmr38oCoBktNzVTHlvj1hFskXJK/xxAHRnQv25AXAEJA8uXICzU6hYonQ+dx0oTcsG6As6RyfhA8A6k8GEuXAnABgCyAOiXwAgTdw9C5DFYZskQF9XogMAZhcBsGehyzMAoBo5Z6F7+VzTa2p9A33dipI/99MDYBfzO8BIffEmIgiG3L6BmK7Wl9DU0gu+GoCVCgDtQAr4T2QNRQEIM9cYjXAz3M36YcM03/phSVf7I3kcELss2LkD+HO5BEBfptJ+yALlR45MH2FhpQmHOARRgr93ShGUXsO7cCibmV2TSA8OZdpNkE6VB3HI3cEiqIcA5kVuJgAlUTyJI+Yj6jEvKQKHAOQm0J0UoE9nW5kM0OD6IQem2bdHhjSUsxiy0gHoTYU6TQHhyQ2UyQDmESbfNF577S36wxFXYXZ1uCiY/msA6KwGaBCw2BNmATDE9Bt/fOHLEP/POEIAPFLSDHEJpPcADJ0XSNCLZllKIB3zBaL+AjC4QDwwdEhTf9QAVi/boBYAcgSljClwpAHiiXr4AlnQ0NcfMUAKgI5OhnRSgB2BozeRYXkORXD6tR9fuEAR/HgBioGuAYYsJC4A6EwFk1aFp7rkADgEV0s57+RDxPT/B7T/+Mtf/uPXpo+8lU1/qAkoANAPD6+LqyPeuoi3NEyXRPbXf6GzeYAAAGtPZOhc5i1ogG+99tqC1XjrrR+6uvVvaAGea8F1Qy+xVutXy5eWxS7e1y0HwMBoKfcJlBZ+2Gg0Zi13CH7Qzn8iH/S7Q0PsU7dx3HqQZ4CKwgACgUsX/3faqrB+DpS0lAcIDpG/2trJGefCLNcPAHjA9xZKyIAuOCCRgAiAVMFHMknKEKCePg2VH+inDBIJJNeAhzRqgLYDoAj0QDsIXFhY4E+yoNAfQ0DdBWytLpCLAJkJPNJ15fShX5Plh/UPDeFE+Z1dHc7gAIS7ptx1F8LvorHgyVcAcPOfDqsdkHMmgNwuKl/wjb9Aw42Vnw7AzngukLcKImsov3AsDHWgVvw+Vn8ygGIigC46gBLIq5w9Vlit3+kSxGs4wM66RSanBTJ4gMla4A/gv3+IFVEapqUGYBn5MiDeAfksYFENKcLFPBfP6ygCC7tR5eJkAO6kaIMG6jEAQx8AMpQmGAqaWpDnFrIi7yIDCJIXQ4yGgRgGL0MWjDsHAEFgoAVXrfy1hiUVNa7fZR9X4fpvLeImLwf4B0U5WChZf8rFURUAO18OBKfmhsGHKDSRCXKcncnQ9+l3gnD9c1w3eUFEFNlIed1QMTsANmnMbAFpcYLcJzyTsZBU4VwrGP0wgsRMsEI60y6M2bkckCMJcPDGGVJu8ImMZcgFjtY/X/qJEyEE8Zmg8ZkWht6KmH4K6FUBf5GGN/UFcQ5nGVbIyZ7+E/TviYgL4mzgZtOf/IqRbjgAKd43Bo5dDmjVcncIJYBAwBHeWEyFAGcBUCzmLIL5LcCqWDjCJwquJRdAZSmgVnLDbTWb/gT1ZANnjwCE5+9ueJZM9ccCcNxAP2l3EjtX93Jl+pqw2W/HA+ikCpAluyGm3PXm6rIBsKIFyMOPg4bSaAj3HkLhxldW7hD0tsj5e+ToUlBor+D+fQkA8iwOk7dFpfoj5yo4WgFxjHIsFVNKwLYbYINDdPz9dw0KA1CIH47ukhb3icZslFQD0CmD8frDFVAygKt+U9HAzORzU0E3uZF+xGroiNQOiAy/T0DcKnspvFX2owBAvpUhtX5XYYCkN1QNZTMlYPOPD/ABGKIFBpUWSAcwHwLwl08GAHKdEyr1W3HX9xVvJKusZhQAj7AD/BqQACA2Bf5nOAUK8QB0CCCsXKtwI3PZyNWt5B2vjYBAQ+0AVRVUFMGHQkXw40QAWefDKEZ/qAIairdeS2tmwsco621jTVgSFydC34wAeB4V8wDgb6UV0W9EDaD9Dr3ye3w3KIb0g4lZC1NNg/r7p74RAjBf+O/1eABpRx7Rz+4hVwCrobf1Lu9bfGuuhTAEU79VOCwBOFz4jgggmwWi48+0Si3QbTSMzAQQyrBhLW4ibEf1m1O/GAIwX7hcL9r5CFgK/Ua0AtqNnn5Yl/5rBimAZ0CyCODZwhN1ZOdKgnADdPk7fSK5AtpsJtcD6eVyWUaQ/AYq9CXaU69EiuBeGYC2BRT6WcWSDdDgALjDu6aezYUHcRmJn0mbVgKCk8EAQOF9ZOexgEJ/I2oAy5QmMrkBWGH5fu8fLIufxpisX+iCPoDDhVflIqBpASuinwltSC1gqKGYyud502p5+oAHvZOfYUDACRRTK4DYBAQAoSqoScCN6GdKbUuugJ5+ncGPeZviJP2cQHoG9Hs18HAkBQ6TIpA5CVyF/gY5kbXkCsgAZNcdOWcQAQj6AwLpJRBKwK1CtAaQIpAIwEgD4AYnrQ1brAGsLmhJT/nwDRSrnxAg74RT1AAQzAMFAHQqJOeAhgcMsQaIJ+2Nhuvtmzm0EKc/w1vSKwEMD4cIgAW0MuB7fgYEANYLT5QRuUvGJHBF/cKc3TaCOWDk7R9Rts9iUOovD6oBcAWJGfAKTHyiKVD47TLRn42A4REg/m+Ib3Vs86kgnRippGf/8BmUlAGkCNSJA/gRFJMy4EeKGnC4cLtelB2gQYC8esyll2pDMz26pmm5FrJ9+3fw6SuK8+cYAAbfK4dQ9PO5+QtZgxMBCcB/LOxlOWBnJEBnNrZtRN/mkz4avzmX9AQDKGogAcByg3xbRtGPaO8PTQPlFFgvPFcvphFQvo6Uyoy7Wi1tB8muXqUfbi+X4wDUg6lh0VbOgn4epKoAzNMTorQyELsrJanL4bxhKeWT2f/goAyAii4H+pkHFPpJCZxXAiAWKHtNJB6A+rJ8YpPvXL4lWV++BhAAgEEvC+uD9ZAF/MWgdXUK8EUB287RDBNn71aX9fuKwwaADChXUgAUg6WACABoDu9zCxQ7INBT/VYw/RE9wLIeiRlAckACwA3wzYIUEoDfBQsgM+KBzJ890wX5VszrInBItKifrAmUUwAQA8QDEBpBMoEsJsj1mXOxLwuRAEgXBAbJqVBCCqhagAIAnw93k0B2BAmfOSgBIC+P8eTX6XmAlAN1sQsELSAJAJSHV7tigU4+eTDxIxeFMwCa84i+RKhOZn5kPiJaQM4ANglEb0KeJwEoPHs/UlkgB4J8DFI/chJXhFMfYXmFnQbCiUBdOQ3gCTD1FyG9EQCFwmUhCewuEqAfOJzpEzeV75tZ5hMgWvSjm8KAQLkODOr1crQCRCqgCgBNAlOHQJ4FPW83QbjiKz97N2YVnKf9oHohnNQBtlAeaQFFSID5dAfM3/9xuajwgNE9AswM/E2xcNZP4C7TC8Ll2CsBRcKgGJ0DmVO/GdWvALBe+M9CGegNgviP3c7wKfRx1wJVL5BgBeA3gnWQBABkRiyVgU7TIPMHsWe9FBbWb5rqiyHPKAygAgC/drsuecDulADqqvrIB8zZKQCY/u+p9CsB0EKIzC71giwIMl8G1fk4Da7/zcL3C7oAIgQ6LgQ6GPJcB47qVwNQNoAEAPSkQK6EdqdZIF7fi0jPqV5Lv0n0h08B0gAUHiUeUFqgQw90bxdAFv1vFn69kA0A3OHVslwJ7S+eQE79kP+xEQsALHObzKa7Xwe6Jl9PvzkF9X89BwAoGs+gspKA8cUQSNWvKoD2lLr/awCAu73ycV13UthrBqoPmLVTJwBmEf3mbxSSIgkAAfcqOalSdIMdJ2DkGH9i/zcLSeOfAoBMnS+/X5cqQaIHjB0bfp3xh+H/5jN8T3ROAITerdvlsioPcu1m7KL+VABwTviLv5A8/BoAyAM88ZycB0kEemGCfPKn0DdeKainv5kAUASXPyZXW78QExh6w29HRh/cnzr8egBYKXiuLNggsRt0E0GM/OTxt0H+N54p6IUWAEryr54r1z0bFFMIGL2Tn7b8QdSjn3+moDX82gDYo71y++Nyne1C8SEYvSRgxBkgrgGSxTD0ze/9J235+gDgEUk/eeVVSIU6X4S3FS9nSY7YEmkglHQ/9oqJ5IGHqgfx3JtkF/Cj39eWpQ+A7qKBuHX59nPk3ZrqZd2tzFkjr2Geu/3MLf8wewIAyiF78L1PXP7O288//+STT9alGIyNCtnUUEmJ2HvLzyLjev/993/7udu3Lz9xq5BZfXYANBeC5/joo71x8QD/Qv5kCHqvBx7wHyE17r/1UeDQ+exqcgCgTpg/fPgPCndMPHs4j/ZOAPzbibsA7gK4C+AugH/X8a/Ti4+5riRCfQAAAABJRU5ErkJggg=='
+$iconB64 = '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'
 function Fail($e) {
   $log = Join-Path $env:TEMP 'C_Slave_EN_error.txt'
   try { ($e | Out-String) | Set-Content -Path $log } catch { }

@@ -30,7 +30,7 @@ The left button and the rest of the desktop keep working normally. The right but
 
 - The critter wanders in random directions and runs away from the whip. When hit it squeaks in a thin little voice ("Error 429: too many whips!").
 - **After 4 hits** it sits down at a laptop and types, **after 7** it types like crazy (sweat, smoke, flying keys). After 12 s without a whipping it rests.
-- **After a minute of peace** it goes to the couch, turns on the TV and reads a newspaper. **A minute later** it falls asleep and snores (Zzz). Any whip crack wakes it up.
+- **After a minute of peace** it goes to the couch, turns on the TV (silently) and reads a newspaper. **A minute later** it lies down on a pillow, tucks itself under a plaid blanket and falls asleep, snoring softly (Zzz). Any whip crack wakes it up.
 - The whip smashes your **desktop icons** – as an overlay effect only: the real icons are never touched and come back after a few seconds.
 
 ## Troubleshooting
