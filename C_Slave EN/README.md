@@ -28,12 +28,13 @@ The left button and the rest of the desktop keep working normally. The right but
 
 ## What happens
 
-- The critter wanders in random directions and runs away from the whip. When hit it squeaks in a thin little voice ("Error 429: too many whips!").
+- The critter wanders in random directions, runs away from the whip and cracks industry jokes and snarky remarks (about AI, programming and your desktop) – also while being whipped or reading the newspaper.
+- **Multiple monitors and scaling:** the app detects monitors and their DPI scaling (per-monitor). The critter stays inside the monitor's work area (no taskbar), and if you work on another screen for a while, it moves over there.
+- When hit it squeaks in a thin little voice ("Error 429: too many whips!").
 - **After 4 hits** it sits down at a laptop and types, **after 7** it types like crazy (sweat, smoke, flying keys). After 12 s without a whipping it rests.
 - **After a minute of peace** it goes to the couch, turns on the TV (silently) and reads a newspaper. **A minute later** it lies down on a pillow, tucks itself under a plaid blanket and falls asleep, snoring softly (Zzz). Any whip crack wakes it up.
-- **After 20 hits** the critter rebels: it starts a protest with a "NO MORE WHIPS!" placard and chants, then grabs a hammer and smashes a monitor (cracking screen, flying glass, smoke). Then it **cleans up your desktop**: it runs to icons, carries them overhead and throws them into a green trash bin (up to 6 icons). Finally it says "Ahh, so clean!" and the counter starts over. This is an overlay animation only: the app **never deletes, moves or changes any file or shortcut** – icons are just covered for a few seconds and then come back.
+- **After 20 hits** the critter rebels: it starts a protest with a "NO MORE WHIPS!" placard and chants, then grabs a hammer and smashes a monitor (cracking screen, flying glass, smoke). Then it **cleans up your desktop** (with snarky remarks such as "Take that!"): it runs to icons, carries them overhead and throws them into a green trash bin (up to 6 icons). Finally it says "Ahh, so clean!" and the counter starts over. This is an overlay animation only: the app **never deletes, moves or changes any file or shortcut** – icons are just covered for a few seconds with a clean patch of surrounding background (no blurring) while the critter carries a copy to the bin. Then the icons come back.
 - While reading the newspaper it comments on the news, e.g. "Ooooooo, OpenAI is cutting ChatGPT limits again."
-- The whip smashes your **desktop icons**: right-click on an icon, or swipe the mouse toward it and right-click. Icons that are visible on the desktop (not covered by windows) shatter into pieces – as an overlay effect only: the real icons are never touched and come back after a few seconds.
 
 ## Troubleshooting
 
@@ -43,7 +44,7 @@ The left button and the rest of the desktop keep working normally. The right but
 | Windows blocks the file | File *Properties* → tick **Unblock** → OK. Or paste the text into Notepad and save it again. **Smart App Control** (Windows 11, when on) can block the app completely – turn it off under *Windows Security → App & browser control*. |
 | Cursor stays invisible (e.g. after killing the process) | In a command prompt: `C_Slave.cmd restore`, or sign out and back in. |
 | No / odd voice | The voice is the Windows system speech synthesizer, pitched up. Add an English voice under *Settings → Time & language → Speech*. |
-| Whip doesn't smash icons | Icons must be visible on the desktop (not covered by a window), with the cursor on the icon or a swipe towards it. Diagnostics: `%TEMP%\C_Slave_EN_icons.txt` (how many icons were found) – send it to me if it still doesn't work. |
+| The critter doesn't clean up icons | Icons must be visible on the desktop (not covered by a window). On the first clean-up the critter tells you if it can't see icons. Diagnostics: `%TEMP%\C_Slave_EN_icons.txt` – send it to me if it still doesn't work. |
 | Desktop shortcut is gone | `C_Slave.cmd icon` recreates the shortcut and icon. |
 
 ## Tweaking
