@@ -22,6 +22,9 @@ using System.Runtime.InteropServices;
 using System.Speech.Synthesis;
 using System.Text;
 using System.Threading;
+#if UIA
+using System.Windows.Automation;
+#endif
 using System.Windows.Forms;
 
 public class Pejcz : Form
@@ -38,6 +41,7 @@ public class Pejcz : Form
         public uint biCompression, biSizeImage; public int bx, by; public uint biClrUsed, biClrImportant;
     }
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] static extern bool IsProcessDPIAware();
     [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SetWindowsHookEx(int id, HookProc cb, IntPtr mod, uint tid);
     [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr h);
     [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr h, int code, IntPtr w, IntPtr l);
@@ -62,6 +66,7 @@ public class Pejcz : Form
     [StructLayout(LayoutKind.Sequential)] struct RECT { public int L, T, R, B; }
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);
@@ -773,12 +778,35 @@ public class Pejcz : Form
         return def == IntPtr.Zero ? IntPtr.Zero : FindWindowEx(def, IntPtr.Zero, "SysListView32", null);
     }
 
+    // zapasowa metoda: UI Automation (gdy bezposredni odczyt z listy ikon nic nie zwroci)
+    List<Rectangle> ScanIconsUia(IntPtr lv)
+    {
+        List<Rectangle> res = new List<Rectangle>();
+#if UIA
+        try
+        {
+            if (lv == IntPtr.Zero) return res;
+            AutomationElement root = AutomationElement.FromHandle(lv);
+            AutomationElementCollection items = root.FindAll(TreeScope.Children, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem));
+            for (int i = 0; i < items.Count && i < 300; i++)
+            {
+                System.Windows.Rect rc = items[i].Current.BoundingRectangle;
+                if (rc.IsEmpty || rc.Width < 8 || rc.Height < 8 || rc.Width > 600 || rc.Height > 600) continue;
+                res.Add(new Rectangle((int)rc.X, (int)rc.Y, (int)rc.Width, (int)rc.Height));
+            }
+        }
+        catch (Exception) { }
+#endif
+        return res;
+    }
+
     List<Rectangle> ScanIcons()
     {
         List<Rectangle> res = new List<Rectangle>();
+        IntPtr lv = IntPtr.Zero;
         try
         {
-            IntPtr lv = FindDesktopList();
+            lv = FindDesktopList();
             if (lv == IntPtr.Zero) return res;
             IntPtr r;
             if (SendMessageTimeout(lv, 0x1004, IntPtr.Zero, IntPtr.Zero, 2, 200, out r) == IntPtr.Zero) return res;
@@ -806,6 +834,7 @@ public class Pejcz : Form
             finally { VirtualFreeEx(hp, mem, UIntPtr.Zero, 0x8000); CloseHandle(hp); }
         }
         catch (Exception) { }
+        if (res.Count == 0) res = ScanIconsUia(lv);
         return res;
     }
 
@@ -825,6 +854,7 @@ public class Pejcz : Form
                 GetClassName(h, sb, 64);
                 string cn = sb.ToString();
                 if (cn == "Progman" || cn == "WorkerW") return false;
+                if (GetWindowTextLength(h) == 0) return true;
                 int ex = GetWindowLong(h, -20);
                 if ((ex & 0x20) != 0) return true;
                 int cloaked;
@@ -839,6 +869,8 @@ public class Pejcz : Form
         catch (Exception) { return true; }
     }
 
+    const string NoIconsMsg = "Nie widzę ikon na pulpicie...";
+    const string CoveredMsg = "Ikony są zasłonięte oknami?";
     int iconLogs;
     void LogIcons()
     {
@@ -848,8 +880,22 @@ public class Pejcz : Form
             StringBuilder sb = new StringBuilder();
             IntPtr lv = FindDesktopList();
             sb.AppendLine(DateTime.Now + "  list=" + lv + "  icons=" + curIcons.Count + "  cursor=" + (mx + VX) + "," + (my + VY));
+            sb.AppendLine("  dpiAware=" + IsProcessDPIAware() + "  screen=" + VX + "," + VY + " " + W + "x" + H + "  uia=" +
+#if UIA
+                "yes"
+#else
+                "no"
+#endif
+                );
             for (int i = 0; i < curIcons.Count && i < 25; i++) sb.AppendLine("  " + curIcons[i] + " visible=" + IconVisible(curIcons[i]));
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "C_Slave_PL_icons.txt"), sb.ToString());
+            if (curIcons.Count == 0) Say(NoIconsMsg, 3f, "");
+            else
+            {
+                int vis = 0;
+                for (int i = 0; i < curIcons.Count; i++) if (IconVisible(curIcons[i])) vis++;
+                if (vis == 0) Say(CoveredMsg, 3f, "");
+            }
         }
         catch (Exception) { }
     }
@@ -2383,7 +2429,14 @@ function Fail($e) {
   } catch { }
   exit 1
 }
-try { Add-Type -TypeDefinition $src -ReferencedAssemblies System.Windows.Forms,System.Drawing,System.Speech -ErrorAction Stop } catch { Fail $_ }
+$refs = @('System.Windows.Forms','System.Drawing','System.Speech')
+$uia = $true
+foreach ($n in 'UIAutomationClient','UIAutomationTypes','WindowsBase') {
+  try { $loc = [Reflection.Assembly]::LoadWithPartialName($n).Location; if ($loc) { $refs += $loc } else { $uia = $false } } catch { $uia = $false }
+}
+$ap = @{ TypeDefinition = $src; ReferencedAssemblies = $refs; ErrorAction = 'Stop' }
+if ($uia) { $ap.CompilerOptions = '/define:UIA' }
+try { Add-Type @ap } catch { Fail $_ }
 # ikona + skrot na pulpicie (raz przy pierwszym uruchomieniu; reczne odtworzenie: C_Slave.cmd ikona)
 try {
   $d = Join-Path $env:LOCALAPPDATA 'C_Slave_PL'
